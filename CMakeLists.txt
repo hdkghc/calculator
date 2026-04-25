@@ -14,8 +14,14 @@ set(SPI_TFT_CS   "17"   CACHE STRING "TFT CS  pin number")
 set(SPI_TFT_DC   "21"   CACHE STRING "TFT DC  pin number")
 set(SPI_TFT_RST  "20"   CACHE STRING "TFT RST pin number")
 set(TFT_OPTIONS TFT_ENABLE_BLACK TFT_ENABLE_RESET TFT_ENABLE_TEXT TFT_ENABLE_SHAPES
-                TFT_ENABLE_ROTATE TFT_ENABLE_SCROLL
+                TFT_ENABLE_ROTATE TFT_ENABLE_SCROLL TFT_ENABLE_FONTS
             CACHE STRING "TFT options/functions")
+
+# build the st7735-library from our submodule
+add_subdirectory(pico-st7735)
+
+include_directories(${CMAKE_CURRENT_LIST_DIR}/pico-st7735/include)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/fonts)
 
 #program configuration
 set(SPI_PORT "spi0" CACHE STRING "spi port-name")
@@ -51,9 +57,6 @@ pico_set_program_name(${PROJECT_NAME} "calculator")
 pico_set_program_version(${PROJECT_NAME} "0.1")
 
 set_target_properties(calculator PROPERTIES SUFFIX ".elf")
-
-# build the st7735-library from our submodule
-add_subdirectory(pico-st7735)
 
 target_link_libraries(calculator
     pico_stdlib

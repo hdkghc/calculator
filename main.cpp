@@ -1,10 +1,11 @@
-#define TFT_ENABLE_TEXT
-#define TFT_ENABLE_FONTS
+#define PROGMEM __attribute__((aligned(4), section(".rodata")))
 
-#include "ST7735_TFT.h"
-#include "hardware/spi.h"
-#include "hw.h"
-#include "pico/stdlib.h"
+extern "C" {
+    #include "ST7735_TFT.h"
+    #include "hardware/spi.h"
+    #include "hw.h"
+    #include "pico/stdlib.h"
+}
 #include <cstdio>
 #include "fonts/CW.h"
 #include "fonts/CWMath.h"
