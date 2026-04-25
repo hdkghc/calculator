@@ -32,18 +32,6 @@ foreach(opt IN LISTS TFT_OPTIONS)
     add_compile_definitions(${opt})
 endforeach(opt)
 
-# ENABLE_FONTS: set on command-line or select from
-# VSCode-menu (see .vscode/cmake-variants.json)
-if(ENABLE_FONTS)
-  message(">>> Font test")
-  add_compile_definitions(TFT_ENABLE_FONTS ENABLE_TEST9 ENABLE_TEST9A)
-else()
-  message(">>> Normal test")
-  add_compile_definitions(ENABLE_TESTR ENABLE_TEST1 ENABLE_TEST1A
-                           ENABLE_TEST2 ENABLE_TEST3 ENABLE_TEST4
-                           ENABLE_TEST5 ENABLE_TEST6 ENABLE_TEST7 ENABLE_TEST10)
-endif()
-
 # add preprocessor-constant DEBUG for Debug-builds
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_VERBOSE_MAKEFILE 1)
