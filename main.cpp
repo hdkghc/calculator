@@ -1,4 +1,4 @@
-#define PROGMEM __attribute__((aligned(4), section(".rodata")))
+// #define PROGMEM __attribute__((aligned(4), section(".rodata")))
 
 extern "C" {
     #include "ST7735_TFT.h"
