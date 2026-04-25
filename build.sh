@@ -12,7 +12,13 @@ echo "Extracting font data..."
 # build main program
 echo "Building with cmake..."
 
+mkdir -p build
 cd build
 rm -rf build/*
+if [ $1 == "test" ]; then
+    cmake .. -DCMAKE_TOOLCHAIN_FILE=$PICO_SDK_PATH/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake -DTEST=1
+else
+    cmake .. -DCMAKE_TOOLCHAIN_FILE=$PICO_SDK_PATH/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake
+fi
 cmake .. -DCMAKE_TOOLCHAIN_FILE=$PICO_SDK_PATH/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake
 make -j4

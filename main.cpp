@@ -6,6 +6,8 @@
 #include "hw.h"
 #include "pico/stdlib.h"
 #include <cstdio>
+#include "fonts/CW.h"
+#include "fonts/CWMath.h"
 
 void init_hw()
 {
@@ -19,5 +21,13 @@ void init_hw()
 
 int main() {
     init_hw();
-    
+    TFT_BlackTab_Initialize();
+    setTextWrap(true);
+#ifdef TEST
+    fillScreen(ST7735_BLACK);
+    drawText(0, 0, "Hello World!", ST7735_WHITE, ST7735_BLACK, 1);
+    drawText(0, 10, "Testing CW font", ST7735_YELLOW, ST7735_BLACK, 1);
+    setFont(&ClassWiz_CW_Display_Regular12pt);
+    drawText(0, 30, "CW 12pt ABCDEFGHIJKLMNOPGRSTUVWXYZabcdefghijklmnopqrstuvwxyz", ST7735_CYAN, ST7735_BLACK, 1);
+#endif
 }
