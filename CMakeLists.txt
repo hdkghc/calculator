@@ -17,6 +17,21 @@ set(TFT_OPTIONS TFT_ENABLE_BLACK TFT_ENABLE_RESET TFT_ENABLE_TEXT TFT_ENABLE_SHA
                 TFT_ENABLE_ROTATE TFT_ENABLE_SCROLL TFT_ENABLE_FONTS
             CACHE STRING "TFT options/functions")
 
+# Define compile options BEFORE adding subdirectory
+add_compile_definitions(SPI_TFT_PORT=${SPI_TFT_PORT})
+add_compile_definitions(SPI_TFT_CS=${SPI_TFT_CS})
+add_compile_definitions(SPI_TFT_DC=${SPI_TFT_DC})
+add_compile_definitions(SPI_TFT_RST=${SPI_TFT_RST})
+foreach(opt IN LISTS TFT_OPTIONS)
+    message(">>> using: ${opt}")
+    add_compile_definitions(${opt})
+endforeach(opt)
+
+add_compile_definitions(TFT_ENABLE_RED)
+add_compile_definitions(TFT_ENABLE_GREEN)
+add_compile_definitions(TFT_ENABLE_GENERIC)
+add_compile_definitions(TFT_ENABLE_ST7735S)
+
 # build the st7735-library from our submodule
 add_subdirectory(pico-st7735)
 
@@ -27,22 +42,23 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/fonts)
 set(SPI_PORT "spi0" CACHE STRING "spi port-name")
 set(SPI_RX   "16"   CACHE STRING "RX  pin number")
 set(SPI_TX   "19"   CACHE STRING "TX  pin number")
-set(SPI_SCK  "24"   CACHE STRING "SCK pin number")
+set(SPI_SCK  "18"   CACHE STRING "SCK pin number")
 
 add_compile_definitions(SPI_PORT=${SPI_PORT})
 add_compile_definitions(SPI_RX=${SPI_RX})
 add_compile_definitions(SPI_TX=${SPI_TX})
 add_compile_definitions(SPI_SCK=${SPI_SCK})
-foreach(opt IN LISTS TFT_OPTIONS)
-    message(">>> using: ${opt}")
-    add_compile_definitions(${opt})
-endforeach(opt)
 
 # add preprocessor-constant DEBUG for Debug-builds
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_VERBOSE_MAKEFILE 1)
   add_compile_definitions(DEBUG)
 else()
+endif()
+
+# add TEST preprocessor definition if passed via -DTEST=1
+if(TEST)
+  add_compile_definitions(TEST)
 endif()
 
 

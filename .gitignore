@@ -1,6 +1,5 @@
 build
 .vscode
-pico-st7735
 font2h/bin
 fonts/*
 test_fonts/build
