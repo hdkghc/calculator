@@ -1,3 +1,11 @@
+/** @file rgb.h
+ *  @brief RGB color manipulation functions for the calculator project
+ *  @author hdkghc
+ *  @date 2026.05.17
+ *  @version 0.1
+ *  License: GNU General Public License v3.0
+ */
+
 #ifndef __RGB_H__
 #define __RGB_H__
 
@@ -27,7 +35,8 @@ enum class Color : uint16_t {
     CYAN = 0x07FF,
     MAGENTA = 0xF81F,
     ORANGE = 0xFC00,
-    PURPLE = 0x8010
+    PURPLE = 0x8010,
+    GRAY = 0x8410,
 };
 
 #endif // __RGB_H__

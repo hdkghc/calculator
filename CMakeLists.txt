@@ -7,7 +7,7 @@ include(pico_sdk_import.cmake)
 
 project(calculator C CXX ASM)
 pico_sdk_init()
-# include_directories(${CMAKE_CURRENT_LIST_DIR}/inc)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/inc)
 
 # library configuration (override if necessary, see pico-st7735 for a complete list)
 # set(SPI_TFT_PORT "spi0" CACHE STRING "TFT spi port-name")
