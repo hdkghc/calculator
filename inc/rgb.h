@@ -17,4 +17,17 @@ uint8_t getB(uint16_t color) {
     return (color << 3) & 0xF8;
 }
 
+enum class Color : uint16_t {
+    BLACK = 0x0000,
+    WHITE = 0xFFFF,
+    RED = 0xF800,
+    GREEN = 0x07E0,
+    BLUE = 0x001F,
+    YELLOW = 0xFFE0,
+    CYAN = 0x07FF,
+    MAGENTA = 0xF81F,
+    ORANGE = 0xFC00,
+    PURPLE = 0x8010
+};
+
 #endif // __RGB_H__
