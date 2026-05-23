@@ -33,6 +33,8 @@ namespace CAS {
             // 4 bits per digit, so each uint8_t can store 2 digits (0-99)
             std::vector<uint8_t> i;
             // & 0x01 : 1 = negative, 0 = positive
+            // & 0x02 : 1 = infinity
+            // & 0x04 : 1 = NaN
             uint8_t f;
             /** @name gdg
              *  @brief get the nth digit (0-based) of the integer
@@ -40,6 +42,9 @@ namespace CAS {
              *  @return The nth digit (0-9)
              */
             uint8_t gdg(size_t n) const {
+                if(isInf() || isNaN()) {
+                    return -1;
+                }
                 if(n >= i.size() << 1) {
                     return -1;
                 } else if(n == (i.size() << 1) - 1 && i.back() & 0xF0 == 0) {
@@ -53,6 +58,9 @@ namespace CAS {
              */
             size_t gl(void) {
                 trim();
+                if(isInf() || isNaN()) {
+                    return -1;
+                }
                 if(i.empty())
                     return 0;
                 if(i.back() & 0xF0) {
@@ -65,6 +73,10 @@ namespace CAS {
              *  @brief Remove leading zeros from the integer
              */
             void trim(void) {
+                if(isInf() || isNaN()) {
+                    i.clear();
+                    return;
+                }
                 while(!i.empty() && i.back() == 0) {
                     i.pop_back();
                 }
@@ -76,6 +88,10 @@ namespace CAS {
              */
             void sdg(size_t n, uint8_t x) {
                 if(x > 9) {
+                    return;
+                }
+                if(isInf() || isNaN()) {
+                    trim();
                     return;
                 }
                 while(n + 1 > gl()) {
@@ -103,6 +119,9 @@ namespace CAS {
             }
             Intg(std::string s) {
                 f = 0;
+                if(s.find("inf") != std::string::npos) {
+                    f |= 0x02;
+                }
                 size_t i = 0;
                 for(auto u : s) {
                     if(u == '-') {
@@ -112,7 +131,58 @@ namespace CAS {
                     }
                 }
             }
+            /** @name isInf
+             *  @brief Check if the integer is infinity
+             *  @return true if the integer is infinity, false otherwise
+             */
+            bool isInf(void) const {
+                return (f & 0x02) >> 1;
+            }
+            /** @name isNaN
+             *  @brief Check if the integer is NaN
+             *  @return true if the integer is NaN, false otherwise
+             */
+            bool isNaN(void) const {
+                return (f & 0x04) >> 2;
+            }
+            /** @name isNeg
+             *  @brief Check if the integer is negative
+             *  @return true if the integer is negative, false otherwise
+             */
+            bool isNeg(void) const {
+                return f & 0x01;
+            }
+            /** @name setInf
+             *  @brief Set the integer to infinity
+             */
+            void setInf(void) {
+                f |= 0x02;
+            }
+            /** @name unsetInf
+             *  @brief Unset the infinity flag of the integer
+             */
+            void unsetInf(void) {
+                f &= 0xFD;
+            }
+            /** @name setNaN
+             *  @brief Set the integer to NaN
+             */
+            void setNaN(void) {
+                f |= 0x04;
+            }
+            /** @name unsetNaN
+             *  @brief Unset the NaN flag of the integer
+             */
+            void unsetNaN(void) {
+                f &= 0xFB;
+            }
             operator std::string() {
+                if(isInf()) {
+                    return std::string(isNeg() ? "-" : "+") + "\\infty";
+                }
+                if(isNaN()) {
+                    return "\\mathrm{NaN}";
+                }
                 std::string s;
                 if(f & 0x01) s += '-';
                 for(size_t i = gl() - 1; i >= 0; --i) {
@@ -127,6 +197,21 @@ namespace CAS {
             }
             Intg operator+(Intg rhs) const {
                 Intg lhs = *this;
+                
+                if(lhs.isInf() || lhs.isNaN() || rhs.isInf() || rhs.isNaN()) {
+                    if(lhs.isNaN() || rhs.isNaN()) {
+                        Intg ret;
+                        ret.setNaN();
+                        return ret;
+                    }
+                    if(lhs.isInf() && rhs.isInf() && (lhs.f & 0x01) != (rhs.f & 0x01)) {
+                        Intg ret;
+                        ret.setNaN();
+                        return ret;
+                    }
+                    return lhs.isInf() ? lhs : rhs;
+                }
+
                 if(lhs.gl() > rhs.gl()) {
                     std::swap(lhs, rhs);
                 }
@@ -178,6 +263,14 @@ namespace CAS {
              *  @return Absolute value of the integer
             */
             Intg abs(void) {
+                if(isNaN()) {
+                    return *this;
+                }
+                if(isInf()) {
+                    Intg ret = *this;
+                    ret.f &= 0xFE;
+                    return ret;
+                }
                 Intg ret = *this;
                 ret.f &= 0xFE;
                 return ret;
@@ -190,9 +283,22 @@ namespace CAS {
              *  @brief Compare two integers
              *  @param lhs Left-hand side integer
              *  @param rhs Right-hand side integer
-             *  @return 1 if lhs > rhs, 0 if lhs < rhs, 2 if lhs == rhs
+             *  @return 1 if lhs > rhs, 0 if lhs < rhs, 2 if lhs == rhs, 3 if error
              */
             uint8_t cmp(Intg lhs, Intg rhs) const {
+                if(lhs.isNaN() || rhs.isNaN()) {
+                    return 3;
+                }
+                if(lhs.isInf() || rhs.isInf()) {
+                    if(lhs.isInf() && rhs.isInf()) {
+                        if((lhs.f & 0x01) == (rhs.f & 0x01)) {
+                            return 3;
+                        } else {
+                            return (lhs.f & 0x01) ? 0 : 1;
+                        }
+                    }
+                    return lhs.isInf() ? ((lhs.f & 0x01) ? 0 : 1) : ((rhs.f & 0x01) ? 1 : 0);
+                }
                 if((lhs.f & 0x01) ^ (rhs.f & 0x01)) {
                     return (lhs.f & 0x01) ? 0 : 1;
                 }
@@ -268,6 +374,9 @@ namespace CAS {
              *  @return The product of the integer and the single digit
              */
             Intg muldig(Intg lhs, uint8_t rhs) {
+                if(lhs.isInf() || lhs.isNaN()) {
+                    return lhs;
+                }
                 uint8_t c = 0;
                 size_t l = lhs.gl();
                 for(size_t i = 0; i < l; ++i) {
@@ -291,6 +400,9 @@ namespace CAS {
              *  @return The integer after appending zeroes
              */
             Intg append0(size_t n) {
+                if(isInf() || isNaN()) {
+                    return *this;
+                }
                 if(gl() == 0) {
                     return *this;
                 }
@@ -306,6 +418,22 @@ namespace CAS {
             }
         public:
             Intg operator*(Intg rhs) {
+                if(isNaN() || rhs.isNaN()) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
+                if(isInf() || rhs.isInf()) {
+                    if((isInf() && rhs == Intg(0)) || (rhs.isInf() && *this == Intg(0))) { // inf * 0
+                        Intg ret;
+                        ret.setNaN();
+                        return ret;
+                    }
+                    Intg ret;
+                    ret.setInf();
+                    ret.f |= (rhs.f ^ this->f) & 0x01;
+                    return ret;
+                }
                 Intg ret;
                 for(size_t i = 0; i < this->gl(); ++i) {
                     Intg tmp = muldig(rhs, this->operator[](i));
@@ -316,6 +444,24 @@ namespace CAS {
                 return ret;
             }
             Intg operator/(Intg rhs) {
+                if(isInf() || rhs.isInf()) {
+                    if(isInf() && rhs.isInf()) {
+                        Intg ret;
+                        ret.setNaN();
+                        return ret;
+                    }
+                    return 
+                        isInf() ? 
+                            rhs == Intg(0) ? 
+                                Intg("nan") : // inf / 0
+                                (rhs.isNeg() ? -*this : *this) : 
+                            Intg(0);
+                }
+                if(isNaN() || rhs.isNaN() || rhs == Intg(0)) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
                 Intg tmp = *this;
                 Intg ret;
                 for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
