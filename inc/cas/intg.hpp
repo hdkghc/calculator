@@ -39,7 +39,7 @@ namespace CAS {
              *  @return Number of digits
              */
             size_t gl(void) {
-                aremove();
+                trim();
                 if(i.empty())
                     return 0;
                 if(i.back() & 0xF0) {
@@ -48,10 +48,10 @@ namespace CAS {
                     return (i.size() << 1) - 1;
                 }
             }
-            /** @name aremove
+            /** @name trim
              *  @brief Remove leading zeros from the integer
              */
-            void aremove(void) {
+            void trim(void) {
                 while(!i.empty() && i.back() == 0) {
                     i.pop_back();
                 }
@@ -70,7 +70,7 @@ namespace CAS {
                 }
                 i[n >> 1] &= 0xF0 >> (n & 1 << 2); // clear digit
                 i[n >> 1] |= x << (n & 1 << 2);    // set digit
-                aremove();
+                trim();
             }
         public:
             Intg() : f(0) {}
@@ -180,6 +180,9 @@ namespace CAS {
              *  @return 1 if lhs > rhs, 0 if lhs < rhs, 2 if lhs == rhs
              */
             uint8_t cmp(Intg lhs, Intg rhs) const {
+                if((lhs.f & 0x01) ^ (rhs.f & 0x01)) {
+                    return (lhs.f & 0x01) ? 0 : 1;
+                }
                 if(lhs.gl() > rhs.gl()) {
                     return 1;
                 } else if(lhs.gl() < rhs.gl()) {
@@ -298,6 +301,33 @@ namespace CAS {
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;
                 return ret;
+            }
+            Intg operator/(Intg rhs) {
+                Intg tmp = *this;
+                Intg ret;
+                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                    Intg t = rhs;
+                    t.append0(i);
+                    t.f &= 0xFE;
+                    while(tmp >= t) {
+                        tmp = tmp - t;
+                        ret.sdg(i, ret[i] + 1);
+                    }
+                }
+                ret.f = (this->f ^ rhs.f) & 0x01;
+                return ret;
+            }
+            Intg operator%(Intg rhs) {
+                Intg tmp = *this;
+                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                    Intg t = rhs;
+                    t.append0(i);
+                    t.f &= 0xFE;
+                    while(tmp >= t) {
+                        tmp = tmp - t;
+                    }
+                }
+                return tmp;
             }
     };
 }
