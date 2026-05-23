@@ -1,4 +1,4 @@
-/** @file display.hpp
+/** @file /inc/display.hpp
  *  @brief Display initialization and control for the calculator project
  *  @author hdkghc
  *  @date 2026.05.17

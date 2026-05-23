@@ -1,4 +1,4 @@
-/** @file main.cpp
+/** @file /src/main.cpp
  *  @brief Main entry point for the calculator project
  *  @author hdkghc
  *  @date 2026.05.17

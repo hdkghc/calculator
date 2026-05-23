@@ -1,4 +1,4 @@
-/** @file rgb.h
+/** @file /inc/rgb.h
  *  @brief RGB color manipulation functions for the calculator project
  *  @author hdkghc
  *  @date 2026.05.17
