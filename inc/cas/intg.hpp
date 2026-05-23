@@ -1,9 +1,21 @@
 /** @file /inc/cas/intg.hpp
  *  @brief Big integer calculation for the computer algebra system module of the calculator project
  *  @author hdkghc
- *  @date 2026.05.23
  *  @version 0.1
- *  License: GNU General Public License v3.0
+ *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #ifndef _CAS_INTG_HPP_
 #define _CAS_INTG_HPP_
@@ -12,6 +24,7 @@
 #include <string>
 #include <cstdint>
 #include <cmath>
+#include <utility>
 
 namespace CAS {
     class Intg {
@@ -329,7 +342,28 @@ namespace CAS {
                 }
                 return tmp;
             }
-    };
-}
+            /** @name divmod
+             *  @brief Divide the integer by another integer and return both the quotient and remainder
+             *  @param rhs The divisor integer
+             *  @return A pair containing the quotient and remainder of the division
+             *  @usage auto [quotient, remainder] = a.divmod(b);
+             */
+            std::pair<Intg, Intg> divmod(Intg rhs) {
+                Intg tmp = *this;
+                Intg ret;
+                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                    Intg t = rhs;
+                    t.append0(i);
+                    t.f &= 0xFE;
+                    while(tmp >= t) {
+                        tmp = tmp - t;
+                        ret.sdg(i, ret[i] + 1);
+                    }
+                }
+                ret.f = (this->f ^ rhs.f) & 0x01;
+                return {ret, tmp};
+            }
+    }; // class Intg
+} // namespace CAS
 
 #endif // _CAS_INTG_HPP_
