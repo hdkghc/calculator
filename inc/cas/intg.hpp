@@ -47,12 +47,12 @@ namespace CAS {
              */
             uint8_t gdg(size_t n) const {
                 if(isInf() || isNaN()) {
-                    return Invalid;
+                    return InvalidDigit;
                 }
                 if(n >= (i.size() << 1)) {
-                    return Invalid;
+                    return InvalidDigit;
                 } else if(n == (i.size() << 1) - 1 && (i.back() & 0xF0) == 0) {
-                    return Invalid;
+                    return InvalidDigit;
                 }
                 return (i[n >> 1] & (0x0F << ((n & 1) << 2))) >> ((n & 1) << 2);
             }
@@ -63,7 +63,7 @@ namespace CAS {
             size_t gl(void) {
                 trim();
                 if(isInf() || isNaN()) {
-                    return Invalid;
+                    return InvalidLength;
                 }
                 if(i.empty())
                     return 0;
@@ -98,6 +98,9 @@ namespace CAS {
                     trim();
                     return;
                 }
+                if(gl() == InvalidLength) {
+                    return;
+                }
                 while(n + 1 > gl()) {
                     i.push_back(0);
                 }
@@ -106,7 +109,8 @@ namespace CAS {
                 trim();
             }
         public:
-            const uint8_t Invalid = 0xFF;
+            const uint8_t InvalidDigit = 0xFF;
+            const size_t InvalidLength = SIZE_MAX;
 
             Intg() : f(0) {}
             // Intg(uint64_t x) : f(0) {
@@ -197,6 +201,9 @@ namespace CAS {
                 if(isNaN()) {
                     return "\\color{red}{NaN}";
                 }
+                if(gl() == InvalidLength) {
+                    return "\\color{red}{Invalid}";
+                }
                 std::string s;
                 if(f & 0x01) s += '-';
                 for(size_t i = gl() - 1; i >= 0; --i) {
@@ -211,7 +218,6 @@ namespace CAS {
             }
             Intg operator+(Intg rhs) const {
                 Intg lhs = *this;
-                
                 if(lhs.isInf() || lhs.isNaN() || rhs.isInf() || rhs.isNaN()) {
                     if(lhs.isNaN() || rhs.isNaN()) {
                         Intg ret;
@@ -224,6 +230,11 @@ namespace CAS {
                         return ret;
                     }
                     return lhs.isInf() ? lhs : rhs; // inf + ? ; inf + inf
+                }
+                if(lhs.gl() == InvalidLength || rhs.gl() == InvalidLength) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
                 }
 
                 if(lhs.gl() > rhs.gl()) {
@@ -285,7 +296,7 @@ namespace CAS {
                 return ret;
             }
             uint8_t operator[](size_t i) {
-                return (gdg(i) == Invalid) ? 0 : gdg(i);
+                return (gdg(i) == InvalidDigit) ? 0 : gdg(i);
             }
         protected:
             /** @name cmp
@@ -309,6 +320,9 @@ namespace CAS {
                     return lhs.isInf() ? 
                         ((lhs.f & 0x01) ? 0 /* -inf < ? */: 1 /* inf > ? */) : 
                         ((rhs.f & 0x01) ? 1 /* ? > -inf */: 0 /* ? < inf */);
+                }
+                if(lhs.gl() == InvalidLength || rhs.gl() == InvalidLength) {
+                    return 3;
                 }
                 if((lhs.f & 0x01) ^ (rhs.f & 0x01)) {
                     return (lhs.f & 0x01) ? 0 : 1;
@@ -388,6 +402,11 @@ namespace CAS {
                 if(lhs.isInf() || lhs.isNaN()) {
                     return lhs;
                 }
+                if(lhs.gl() == InvalidLength) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
                 uint8_t c = 0;
                 size_t l = lhs.gl();
                 for(size_t i = 0; i < l; ++i) {
@@ -414,7 +433,7 @@ namespace CAS {
                 if(isInf() || isNaN()) {
                     return *this;
                 }
-                if(gl() == 0) {
+                if(gl() == 0 || gl() == InvalidLength) {
                     return *this;
                 }
                 if(n & 1) {
@@ -445,6 +464,11 @@ namespace CAS {
                     ret.f |= (rhs.f ^ this->f) & 0x01;
                     return ret;
                 }
+                if(gl() == InvalidLength || rhs.gl() == InvalidLength) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
                 Intg ret;
                 for(size_t i = 0; i < this->gl(); ++i) {
                     Intg tmp = muldig(rhs, this->operator[](i));
@@ -473,6 +497,11 @@ namespace CAS {
                     ret.setNaN();
                     return ret;
                 }
+                if(gl() == InvalidLength || rhs.gl() == InvalidLength) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
                 Intg tmp = *this;
                 Intg ret;
                 for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
@@ -495,6 +524,11 @@ namespace CAS {
                 }
                 if(rhs.isInf()) {
                     return *this;
+                }
+                if(gl() == InvalidLength || rhs.gl() == InvalidLength) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
                 }
                 Intg tmp = *this;
                 for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
@@ -530,6 +564,11 @@ namespace CAS {
                             std::make_pair(Intg(0), *this); // ? / inf
                 }
                 if(isNaN() || rhs.isNaN() || rhs == Intg(0)) {
+                    Intg ret;
+                    ret.setNaN();
+                    return std::make_pair(ret, ret);
+                }
+                if(gl() == InvalidLength || rhs.gl() == InvalidLength) {
                     Intg ret;
                     ret.setNaN();
                     return std::make_pair(ret, ret);
