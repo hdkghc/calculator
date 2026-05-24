@@ -109,8 +109,8 @@ namespace CAS {
                 trim();
             }
         public:
-            const uint8_t InvalidDigit = 0xFF;
-            const size_t InvalidLength = SIZE_MAX;
+            static const uint8_t InvalidDigit = 0xFF;
+            static const size_t InvalidLength = SIZE_MAX;
 
             Intg() : f(0) {}
             // Intg(uint64_t x) : f(0) {
@@ -123,14 +123,28 @@ namespace CAS {
                 if(x < 0) f = 1;
                 else f = 0;
                 for(size_t i = 0; x; ++i) {
-                    sdg(i, std::abs(x) % 10);
+                    sdg(i, std::llabs(x) % 10);
                     x /= 10;
                 }
             }
             Intg(std::string s) {
                 f = 0;
                 if(s.find("inf") != std::string::npos) {
+                    for(auto u : s) {
+                        if(u == '-') {
+                            f ^= 0x01;
+                        }
+                    }
                     f |= 0x02;
+                    return;
+                }
+                if(s.find("nan") != std::string::npos) {
+                    f |= 0x04;
+                    return;
+                }
+                if(s.find("NaN") != std::string::npos) {
+                    f |= 0x04;
+                    return;
                 }
                 size_t i = 0;
                 for(auto u : s) {
@@ -140,14 +154,6 @@ namespace CAS {
                         sdg(i++, u - '0');
                     }
                 }
-            }
-            Intg& operator=(const Intg& other) {
-                if (this == &other) {
-                    return *this;
-                }
-                i = other.i;
-                f = other.f;
-                return *this;
             }
             /** @name isInf
              *  @brief Check if the integer is infinity
@@ -204,10 +210,13 @@ namespace CAS {
                 if(gl() == InvalidLength) {
                     return "\\color{red}{Invalid}";
                 }
+                if(gl() == 0) {
+                    return "0";
+                }
                 std::string s;
                 if(f & 0x01) s += '-';
-                for(size_t i = gl() - 1; i >= 0; --i) {
-                    s += '0' + gdg(i);
+                for(size_t i = gl(); i > 0; --i) {
+                    s += '0' + gdg(i - 1);
                 }
                 return s.empty() || (s.size() == 1 && s[0] == '-') ? "0" : s;
             }
@@ -332,10 +341,10 @@ namespace CAS {
                 } else if(lhs.gl() < rhs.gl()) {
                     return 0;
                 }
-                for(size_t i = lhs.gl() - 1; i >= 0; --i) {
-                    if(lhs[i] > rhs[i]) {
+                for(size_t i = lhs.gl(); i > 0; --i) {
+                    if(lhs[i - 1] > rhs[i - 1]) {
                         return 1;
-                    } else if(lhs[i] < rhs[i]) {
+                    } else if(lhs[i - 1] < rhs[i - 1]) {
                         return 0;
                     }
                 }
@@ -437,9 +446,9 @@ namespace CAS {
                     return *this;
                 }
                 if(n & 1) {
-                    for(size_t i = gl() - 1; i >= 0; --i) {
-                        sdg(i + n, this->operator[](i));
-                        sdg(i, 0);
+                    for(size_t i = gl(); i > 0; --i) {
+                        sdg(i - 1 + n, this->operator[](i - 1));
+                        sdg(i - 1, 0);
                     }
                 } else {
                     i.insert(i.begin(), (n + 1) >> 1, 0);
@@ -502,15 +511,18 @@ namespace CAS {
                     ret.setNaN();
                     return ret;
                 }
+                if(gl() < rhs.gl()) {
+                    return Intg(0);
+                }
                 Intg tmp = *this;
                 Intg ret;
-                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
                     Intg t = rhs;
-                    t.append0(i);
+                    t.append0(i - 1);
                     t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
-                        ret.sdg(i, ret[i] + 1);
+                        ret.sdg(i - 1, ret[i - 1] + 1);
                     }
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;
@@ -530,10 +542,13 @@ namespace CAS {
                     ret.setNaN();
                     return ret;
                 }
+                if(gl() < rhs.gl()) {
+                    return *this;
+                }
                 Intg tmp = *this;
-                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
                     Intg t = rhs;
-                    t.append0(i);
+                    t.append0(i - 1);
                     t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
@@ -573,15 +588,18 @@ namespace CAS {
                     ret.setNaN();
                     return std::make_pair(ret, ret);
                 }
+                if(gl() < rhs.gl()) {
+                    return std::make_pair(Intg(0), *this);
+                }
                 Intg tmp = *this;
                 Intg ret;
-                for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
+                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
                     Intg t = rhs;
-                    t.append0(i);
+                    t.append0(i - 1);
                     t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
-                        ret.sdg(i, ret[i] + 1);
+                        ret.sdg(i - 1, ret[i - 1] + 1);
                     }
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;

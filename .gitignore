@@ -3,3 +3,4 @@ build
 font2h/bin
 fonts/*
 test_fonts/build
+test/bin
