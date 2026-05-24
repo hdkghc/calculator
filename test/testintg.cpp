@@ -11,20 +11,23 @@ int main() {
 
     string s1, s2, op;
     while (true) {
-        cout << "Input I1 I2: ";
+        cout << "Input I1: ";
         cin >> s1;
         if (s1 == "exit") break;
+        cout << "Input I2: ";
         cin >> s2;
+        cout << "Input operator: ";
+        cin >> op;
+        if (op == "exit") break;
 
+        cout << "Construct I1: ";
         Intg I1(s1);
+        cout << "Construct I2: ";
         Intg I2(s2);
 
         cout << "I1 = " << string(I1) << endl;
         cout << "I2 = " << string(I2) << endl;
 
-        cout << "Input operator: ";
-        cin >> op;
-        if (op == "exit") break;
 
         cout << "\n[Ans] ";
         if (op == "+") {
