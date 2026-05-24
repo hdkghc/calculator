@@ -31,6 +31,10 @@ namespace CAS {
         protected:
             // Store digits in reverse order
             // 4 bits per digit, so each uint8_t can store 2 digits (0-99)
+            // For example, the integer 543210 would be stored as:
+            //      i[0] = 0x01 (4 in low 4 bits, 5 in high 4 bits)
+            //      i[1] = 0x23 (2 in low 4 bits, 3 in high 4 bits)
+            //      i[2] = 0x45 (0 in low 4 bits, 1 in high 4 bits)
             std::vector<uint8_t> i;
             // & 0x01 : 1 = negative, 0 = positive
             // & 0x02 : 1 = infinity
@@ -43,14 +47,14 @@ namespace CAS {
              */
             uint8_t gdg(size_t n) const {
                 if(isInf() || isNaN()) {
-                    return -1;
+                    return Invalid;
                 }
-                if(n >= i.size() << 1) {
-                    return -1;
-                } else if(n == (i.size() << 1) - 1 && i.back() & 0xF0 == 0) {
-                    return -1;
+                if(n >= (i.size() << 1)) {
+                    return Invalid;
+                } else if(n == (i.size() << 1) - 1 && (i.back() & 0xF0) == 0) {
+                    return Invalid;
                 }
-                return i[n >> 1] & (0x0F << (n & 1 << 2)) >> (n & 1 << 2);
+                return (i[n >> 1] & (0x0F << ((n & 1) << 2))) >> ((n & 1) << 2);
             }
             /** @name gl
              *  @brief get the number of digits in the integer
@@ -59,7 +63,7 @@ namespace CAS {
             size_t gl(void) {
                 trim();
                 if(isInf() || isNaN()) {
-                    return -1;
+                    return Invalid;
                 }
                 if(i.empty())
                     return 0;
@@ -97,11 +101,13 @@ namespace CAS {
                 while(n + 1 > gl()) {
                     i.push_back(0);
                 }
-                i[n >> 1] &= 0xF0 >> (n & 1 << 2); // clear digit
-                i[n >> 1] |= x << (n & 1 << 2);    // set digit
+                i[n >> 1] &= 0xF0 >> ((n & 1) << 2); // clear digit
+                i[n >> 1] |= x << ((n & 1) << 2);    // set digit
                 trim();
             }
         public:
+            const uint8_t Invalid = 0xFF;
+
             Intg() : f(0) {}
             // Intg(uint64_t x) : f(0) {
             //     for(size_t i = 0; x; ++i) {
@@ -130,6 +136,14 @@ namespace CAS {
                         sdg(i++, u - '0');
                     }
                 }
+            }
+            Intg& operator=(const Intg& other) {
+                if (this == &other) {
+                    return *this;
+                }
+                i = other.i;
+                f = other.f;
+                return *this;
             }
             /** @name isInf
              *  @brief Check if the integer is infinity
@@ -181,7 +195,7 @@ namespace CAS {
                     return std::string(isNeg() ? "-" : "+") + "\\infty";
                 }
                 if(isNaN()) {
-                    return "\\mathrm{NaN}";
+                    return "\\color{red}{NaN}";
                 }
                 std::string s;
                 if(f & 0x01) s += '-';
@@ -205,11 +219,11 @@ namespace CAS {
                         return ret;
                     }
                     if(lhs.isInf() && rhs.isInf() && (lhs.f & 0x01) != (rhs.f & 0x01)) {
-                        Intg ret;
+                        Intg ret; // inf + (-inf) === inf - inf
                         ret.setNaN();
                         return ret;
                     }
-                    return lhs.isInf() ? lhs : rhs;
+                    return lhs.isInf() ? lhs : rhs; // inf + ? ; inf + inf
                 }
 
                 if(lhs.gl() > rhs.gl()) {
@@ -266,17 +280,12 @@ namespace CAS {
                 if(isNaN()) {
                     return *this;
                 }
-                if(isInf()) {
-                    Intg ret = *this;
-                    ret.f &= 0xFE;
-                    return ret;
-                }
                 Intg ret = *this;
                 ret.f &= 0xFE;
                 return ret;
             }
             uint8_t operator[](size_t i) {
-                return (gdg(i) == (uint8_t)(-1)) ? 0 : gdg(i);
+                return (gdg(i) == Invalid) ? 0 : gdg(i);
             }
         protected:
             /** @name cmp
@@ -292,12 +301,14 @@ namespace CAS {
                 if(lhs.isInf() || rhs.isInf()) {
                     if(lhs.isInf() && rhs.isInf()) {
                         if((lhs.f & 0x01) == (rhs.f & 0x01)) {
-                            return 3;
+                            return 3; // inf - inf = NaN != 0
                         } else {
                             return (lhs.f & 0x01) ? 0 : 1;
                         }
                     }
-                    return lhs.isInf() ? ((lhs.f & 0x01) ? 0 : 1) : ((rhs.f & 0x01) ? 1 : 0);
+                    return lhs.isInf() ? 
+                        ((lhs.f & 0x01) ? 0 /* -inf < ? */: 1 /* inf > ? */) : 
+                        ((rhs.f & 0x01) ? 1 /* ? > -inf */: 0 /* ? < inf */);
                 }
                 if((lhs.f & 0x01) ^ (rhs.f & 0x01)) {
                     return (lhs.f & 0x01) ? 0 : 1;
@@ -429,7 +440,7 @@ namespace CAS {
                         ret.setNaN();
                         return ret;
                     }
-                    Intg ret;
+                    Intg ret; // inf * ? ; ? * inf
                     ret.setInf();
                     ret.f |= (rhs.f ^ this->f) & 0x01;
                     return ret;
@@ -445,17 +456,17 @@ namespace CAS {
             }
             Intg operator/(Intg rhs) {
                 if(isInf() || rhs.isInf()) {
-                    if(isInf() && rhs.isInf()) {
+                    if(isInf() && rhs.isInf()) { // inf / inf
                         Intg ret;
                         ret.setNaN();
                         return ret;
                     }
                     return 
                         isInf() ? 
-                            rhs == Intg(0) ? 
+                            rhs == Intg(0) ? // inf / ?
                                 Intg("nan") : // inf / 0
-                                (rhs.isNeg() ? -*this : *this) : 
-                            Intg(0);
+                                (rhs.isNeg() ? -*this : *this) : // inf / - ; inf / +
+                            Intg(0); // ? / inf
                 }
                 if(isNaN() || rhs.isNaN() || rhs == Intg(0)) {
                     Intg ret;
@@ -477,6 +488,14 @@ namespace CAS {
                 return ret;
             }
             Intg operator%(Intg rhs) {
+                if(isInf() || isNaN() || rhs.isNaN() || rhs == Intg(0)) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
+                if(rhs.isInf()) {
+                    return *this;
+                }
                 Intg tmp = *this;
                 for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
                     Intg t = rhs;
@@ -492,9 +511,29 @@ namespace CAS {
              *  @brief Divide the integer by another integer and return both the quotient and remainder
              *  @param rhs The divisor integer
              *  @return A pair containing the quotient and remainder of the division
-             *  @usage auto [quotient, remainder] = a.divmod(b);
+             *  @code
+             *  auto [quotient, remainder] = a.divmod(b);
+             *  @endcode
              */
             std::pair<Intg, Intg> divmod(Intg rhs) {
+                if(isInf() || rhs.isInf()) {
+                    if(isInf() && rhs.isInf()) { // inf / inf
+                        Intg ret;
+                        ret.setNaN();
+                        return std::make_pair(ret, ret);
+                    }
+                    return 
+                        isInf() ? 
+                            rhs == Intg(0) ? // inf / ?
+                                std::make_pair(Intg("nan"), Intg("nan")) : // inf / 0
+                                (rhs.isNeg() ? std::make_pair(-*this, Intg(0)) : std::make_pair(*this, Intg(0))) : // inf / - ; inf / +
+                            std::make_pair(Intg(0), *this); // ? / inf
+                }
+                if(isNaN() || rhs.isNaN() || rhs == Intg(0)) {
+                    Intg ret;
+                    ret.setNaN();
+                    return std::make_pair(ret, ret);
+                }
                 Intg tmp = *this;
                 Intg ret;
                 for(size_t i = tmp.gl() - rhs.gl(); i >= 0; --i) {
@@ -507,7 +546,71 @@ namespace CAS {
                     }
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;
-                return {ret, tmp};
+                return std::make_pair(ret, tmp);
+            }
+            /** @name pow
+             *  @brief Raise the integer to the power of another integer
+             *  @param rhs The exponent integer
+             *  @return The result of raising the integer to the power of exp
+             */
+            Intg pow(Intg rhs) {
+                if(rhs.isNaN() || isNaN()) {
+                    Intg ret;
+                    ret.setNaN();
+                    return ret;
+                }
+                if(rhs.isInf()) { // ? ^ inf
+                    if(*this == Intg(1)) { // 1 ^ inf
+                        return Intg(1);
+                    }
+                    if(*this == Intg(-1)) { // (-1) ^ inf
+                         return Intg("nan");
+                    }
+                    if(*this == Intg(0)) { // 0 ^ inf
+                        return Intg(0);
+                    }
+                    if(this->isInf()) {
+                        if(this->isNeg()) { // (-inf) ^ inf
+                            return Intg("nan");
+                        } else { // inf ^ inf
+                            return Intg("inf");
+                        }
+                    }
+                    if(rhs.isNeg()) { // ? ^ (-inf)
+                        return Intg(0);
+                    } else {
+                        return isNeg() ? Intg("-inf") /* - ^ inf */: Intg("inf") /* + ^ inf */;
+                    }
+                }
+                if(isInf()) { // inf ^ ?
+                    if(rhs.isNeg()) {
+                        return Intg(0);
+                    } else {
+                        return *this;
+                    }
+                }
+                if(rhs.isNeg()) {
+                    return *this == Intg(0) ? Intg("inf") : Intg(0); // integer power with negative exponent is 0
+                }
+                if(*this == Intg(0) && rhs == Intg(0)) { // 0 ^ 0
+                    return Intg("nan");
+                }
+                if(rhs == Intg(0)) {
+                    return Intg(1); // integer power with exponent 0 is 1
+                }
+                if(*this == Intg(0)) {
+                    return Intg(0); // 0 ^ positive integer is 0
+                }
+                Intg ret(1);
+                Intg base = *this;
+                while(rhs > Intg(0)) {
+                    if(rhs[0] & 1) { // odd exponent
+                        ret = ret * base;
+                    }
+                    base = base * base;
+                    rhs = rhs / Intg(2);
+                }
+                return ret;
             }
     }; // class Intg
 } // namespace CAS
