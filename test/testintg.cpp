@@ -77,7 +77,7 @@ int main() {
             cout << (I1 != I2 ? "true" : "false") << endl;
         }
         else {
-            cout << "不支持的运算符" << endl;
+            cout << "Unsupported operator" << endl;
         }
         cout << "-----------------------------------------" << endl;
     }

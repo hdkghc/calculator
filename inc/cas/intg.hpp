@@ -130,7 +130,7 @@ namespace CAS {
             Intg(std::string s) {
                 f = 0;
                 if(s.find("inf") != std::string::npos) {
-                    for(auto u : s) {
+                    for(auto &u : s) {
                         if(u == '-') {
                             f ^= 0x01;
                         }
@@ -147,7 +147,7 @@ namespace CAS {
                     return;
                 }
                 size_t i = 0;
-                for(auto u : s) {
+                for(auto &u : s) {
                     if(u == '-') {
                         f ^= 0x01;
                     } else if(u >= '0' && u <= '9') {
