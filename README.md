@@ -7,7 +7,7 @@ Under development
 
 This project aims to be the most powerful and feature-rich scientific and graphical calculator for the Raspberry Pi Pico microcontroller—far surpassing most commercial scientific and graphical calculators in both capability and flexibility. It is not a simple demo, but a long-term, ambitious open-source project.
 
-本项目致力于打造功能最强大、特性最丰富的树莓派Pico科学与图形计算器，目标远超市面上绝大多数同类产品。这不仅仅是一个简单的演示，而是一个长期的、充满雄心的开源项目。
+本项目致力于打造功能强大、特性丰富的树莓派Pico科学与图形计算器。这不仅仅是一个简单的演示，而是一个长期的、充满雄心的开源项目。
 
 ### Features | 功能
 - Advanced scientific and graphical calculation (in progress)
@@ -22,7 +22,6 @@ This project aims to be the most powerful and feature-rich scientific and graphi
 - `CMakeLists.txt`: Build configuration for CMake | CMake 构建配置
 - `inc/`: Header files | 头文件目录
 - `fonts/`, `font2h/`: Font resources and conversion tools | 字体资源及转换工具
-- `pico-st7735/`: ST7735 display driver and related code (required) | ST7735 显示驱动及相关代码（必需）
 - `build/`, `bin/`: Build output directories | 构建输出目录
 
 ### Build Instructions | 构建方法
@@ -43,6 +42,11 @@ This project aims to be the most powerful and feature-rich scientific and graphi
 This project is licensed under the GNU General Public License v3.0 (GPLv3). See LICENSE for details.
 
 本项目采用 GNU 通用公共许可证 第三版（GPLv3）。详情见 LICENSE 文件。
+
+### Disclaimer | 免责声明
+This is an amateur non-commercial personal project. All documents and codes are provided "as-is" without any warranty. The author shall not be liable for any property loss or personal injury arising from hardware production, assembly or commercial use of this project.
+
+项目为业余爱好者开源项目，代码、接线文档按现状交付，作者不承担任何因自制硬件、商用量产带来的人身、财产、产品质量、安全事故赔偿责任
 
 ---
 
