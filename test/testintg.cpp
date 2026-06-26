@@ -20,9 +20,7 @@ int main() {
         cin >> op;
         if (op == "exit") break;
 
-        cout << "Construct I1: ";
         Intg I1(s1);
-        cout << "Construct I2: ";
         Intg I2(s2);
 
         cout << "I1 = " << string(I1) << endl;

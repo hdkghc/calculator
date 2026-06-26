@@ -101,11 +101,19 @@ namespace CAS {
                 if(gl() == InvalidLength) {
                     return;
                 }
-                while(n + 1 > gl()) {
-                    i.push_back(0);
+
+                const size_t byteIdx = n >> 1;
+                if(i.size() <= byteIdx) {
+                    i.resize(byteIdx + 1, 0);
                 }
-                i[n >> 1] &= 0xF0 >> ((n & 1) << 2); // clear digit
-                i[n >> 1] |= x << ((n & 1) << 2);    // set digit
+
+                if(n & 1) {
+                    i[byteIdx] &= 0x0F; // clear high nibble
+                    i[byteIdx] |= static_cast<uint8_t>(x << 4); // set high nibble
+                } else {
+                    i[byteIdx] &= 0xF0; // clear low nibble
+                    i[byteIdx] |= x;    // set low nibble
+                }
                 trim();
             }
         public:
@@ -146,12 +154,14 @@ namespace CAS {
                     f |= 0x04;
                     return;
                 }
-                size_t i = 0;
-                for(auto &u : s) {
+
+                size_t digitIdx = 0;
+                for(auto it = s.rbegin(); it != s.rend(); ++it) {
+                    const char u = *it;
                     if(u == '-') {
                         f ^= 0x01;
                     } else if(u >= '0' && u <= '9') {
-                        sdg(i++, u - '0');
+                        sdg(digitIdx++, u - '0');
                     }
                 }
             }
@@ -246,7 +256,7 @@ namespace CAS {
                     return ret;
                 }
 
-                if(lhs.gl() > rhs.gl()) {
+                if(lhs.gl() < rhs.gl()) {
                     std::swap(lhs, rhs);
                 }
                 if((lhs.f & 0x01) ^ (rhs.f & 0x01)) { // minus
@@ -254,9 +264,9 @@ namespace CAS {
                     // & 0x01 : 1 = borrow, 0 = no borrow
                     uint8_t flg = 0;
                     size_t l = 0;
-                    if(lhs.abs() > rhs.abs()) {
+                    flg |= ((lhs.abs() < rhs.abs()) ? (rhs.f & 0x01) : (lhs.f & 0x01)) << 1;
+                    if(lhs.abs() < rhs.abs()) {
                         std::swap(lhs, rhs);
-                        flg |= 0x02;
                     }
                     l = lhs.gl();
                     for(size_t i = 0; i < l; ++i) {
@@ -368,6 +378,9 @@ namespace CAS {
             }
             bool operator!=(Intg rhs) {
                 return cmp(*this, rhs) != 2;
+            }
+            bool can_compare(Intg rhs) {
+                return cmp(*this, rhs) != 3;
             }
         protected:
             /** @name digmul
