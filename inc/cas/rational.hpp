@@ -25,7 +25,7 @@
 
 namespace CAS {
     class Rational {
-        protected:
+        public:
             /** @name num
              *  @brief The numerator of the rational number
              */
@@ -34,11 +34,33 @@ namespace CAS {
              *  @brief The denominator of the rational number
              */
             Intg den;
-        public:
             /** @name simplify
              *  @brief Simplifies the rational number
              */
             void simplify(void) {
+                if(den < Intg(0)) {
+                    num = -num;
+                    den = -den;
+                }
+                if(num.isNaN() || den.isNaN()) {
+                    num.setNaN();
+                    den.setNaN();
+                    return;
+                }
+                if(num.isInf() && den.isInf()) {
+                    num.setNaN();
+                    den.setNaN();
+                    return;
+                }
+                if(num.isInf()) {
+                    den = Intg(1);
+                    return;
+                }
+                if(den.isInf()) {
+                    num = Intg(0);
+                    den = Intg(1);
+                    return;
+                }
                 if(den == Intg(0)) {
                     den = Intg(1);
                     num.setInf();
@@ -56,6 +78,67 @@ namespace CAS {
                     den = -den;
                 }
             }
+            Rational(Intg num, Intg den) : num(num), den(den) {
+                simplify();
+            }
+            Rational(Intg num) : num(num), den(Intg(1)) {}
+            Rational() : num(Intg(0)), den(Intg(1)) {}
+            Rational operator+(Rational rhs) {
+                Rational ret(num * rhs.den + rhs.num * den, den * rhs.den);
+                ret.simplify();
+                return ret;
+            }
+            Rational operator-(Rational rhs) {
+                Rational ret(num * rhs.den - rhs.num * den, den * rhs.den);
+                ret.simplify();
+                return ret;
+            }
+            Rational operator*(Rational rhs) {
+                Rational ret(num * rhs.num, den * rhs.den);
+                ret.simplify();
+                return ret;
+            }
+            Rational operator/(Rational rhs) {
+                Rational ret(num * rhs.den, den * rhs.num);
+                ret.simplify();
+                return ret;
+            }
+            /** @name can_compare
+             *  @brief Check if two integers can be compared (not NaN)
+             *  @param rhs Right-hand side integer
+             *  @return true if both integers can be compared, false otherwise
+             */
+            bool can_compare(Rational rhs) {
+                this->simplify();
+                rhs.simplify();
+                return !num.isNaN() && !rhs.num.isNaN();
+            }
+            bool operator==(Rational rhs) {
+                return (num == rhs.num) && (den == rhs.den);
+            }
+            bool operator!=(Rational rhs) {
+                return !(*this == rhs);
+            }
+            bool operator<(Rational rhs) {
+                return (num * rhs.den) < (rhs.num * den);
+            }
+            bool operator<=(Rational rhs) {
+                return (num * rhs.den) <= (rhs.num * den);
+            }
+            bool operator>(Rational rhs) {
+                return (num * rhs.den) > (rhs.num * den);
+            }
+            bool operator>=(Rational rhs) {
+                return (num * rhs.den) >= (rhs.num * den);
+            }
+            operator std::string() {
+                if(den == Intg(1)) {
+                    return std::string(num);
+                } else {
+                    return "\\frac{" + std::string(num) + "}{" + std::string(den) + "}";
+                }
+            }
+            
     };
 }
 

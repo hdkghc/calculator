@@ -379,6 +379,11 @@ namespace CAS {
             bool operator!=(Intg rhs) {
                 return cmp(*this, rhs) != 2;
             }
+            /** @name can_compare
+             *  @brief Check if two integers can be compared (not NaN)
+             *  @param rhs Right-hand side integer
+             *  @return true if both integers can be compared, false otherwise
+             */
             bool can_compare(Intg rhs) {
                 return cmp(*this, rhs) != 3;
             }
