@@ -104,9 +104,9 @@ namespace CAS {
                 return ret;
             }
             /** @name can_compare
-             *  @brief Check if two integers can be compared (not NaN)
-             *  @param rhs Right-hand side integer
-             *  @return true if both integers can be compared, false otherwise
+             *  @brief Check if two rational numbers can be compared (not NaN)
+             *  @param rhs Right-hand side rational number
+             *  @return true if both numbers can be compared, false otherwise
              */
             bool can_compare(Rational rhs) {
                 this->simplify();
@@ -138,7 +138,27 @@ namespace CAS {
                     return "\\frac{" + std::string(num) + "}{" + std::string(den) + "}";
                 }
             }
-            
+            /** @name isZero
+             *  @return True if this is zero
+             */
+            bool isZero() {
+                simplify();
+                return num == 0;
+            }
+            /** @name isInteger
+             *  @return True if this is integer
+             */
+            bool isInteger() {
+                simplify();
+                return den == 1;
+            }
+            /** @name numerator
+             *  @return The numerator of the rational number
+             */
+            Intg numerator() {
+                simplify();
+                return num;
+            }
     };
 }
 

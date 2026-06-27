@@ -393,7 +393,7 @@ namespace CAS {
              *  @param a First digit (0-9)
              *  @param b Second digit (0-9)
              *  @return The product of the two digits as a byte (0-99)
-             *  @usage uint8_t result = digmul(7, 8); // result will be 0x56 in hexadecimal
+             *  @example uint8_t result = digmul(7, 8); // result will be 0x56 in hexadecimal
              */
             uint8_t digmul(uint8_t a, uint8_t b) {
                 return makebyte((a * b) / 10, (a * b) % 10);
@@ -686,6 +686,24 @@ namespace CAS {
                     rhs = rhs / Intg(2);
                 }
                 return ret;
+            }
+            /** @name sqrt
+             *  @brief Calculate the square root of the integer
+             *  @param rhs The exponent integer
+             *  @return The result of the square root
+             */
+            Intg sqrt(Intg x) {
+                Intg x1 = x - 1;
+                Intg s = 1;
+                Intg g0, g1;
+
+                g0 = Intg(2).pow(s);
+                g1 = (g0 + (x / g0)) / 2;
+                while(g1 < g0) {
+                    g0 = g1;
+                    g1 = (g0 + x / g0) / 2;
+                }
+                return g0;
             }
     }; // class Intg
 } // namespace CAS
