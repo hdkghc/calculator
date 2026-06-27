@@ -32,9 +32,6 @@ namespace CAS {
     /**
      *  @name SimpUtil
      *  @brief Utility functions and types for the expression tree simplifier
-     *  @details Provides type checking predicates, node creation helpers, deep copy, and comparison
-     *           functions used throughout the simplification process. All functions are designed
-     *           to work with the object pool for memory efficiency on embedded platforms.
      */
     namespace SimpUtil {
 
@@ -46,8 +43,6 @@ namespace CAS {
 
         /** @name isRational
          *  @brief Check if a node holds a rational number value
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node exists and is of type valRational, false otherwise
          */
         inline bool isRational(Exptree* n) {
             return n && n->valtp == Exptree::val_t::valRational;
@@ -55,8 +50,6 @@ namespace CAS {
 
         /** @name isVariable
          *  @brief Check if a node holds a variable name
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node exists and is of type valVariable, false otherwise
          */
         inline bool isVariable(Exptree* n) {
             return n && n->valtp == Exptree::val_t::valVariable;
@@ -64,8 +57,6 @@ namespace CAS {
 
         /** @name isFunction
          *  @brief Check if a node is a function or operator node
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node exists and is of type valFunction, false otherwise
          */
         inline bool isFunction(Exptree* n) {
             return n && n->valtp == Exptree::val_t::valFunction;
@@ -73,9 +64,6 @@ namespace CAS {
 
         /** @name isFunction
          *  @brief Check if a node is a specific named function
-         *  @param n Pointer to the expression tree node to check
-         *  @param name C-string function name to compare against
-         *  @return true if the node is a function node with matching name, false otherwise
          */
         inline bool isFunction(Exptree* n, const char* name) {
             return isFunction(n) && n->var == name;
@@ -83,8 +71,6 @@ namespace CAS {
 
         /** @name isZero
          *  @brief Check if a node represents the rational number zero
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with value 0, false otherwise
          */
         inline bool isZero(Exptree* n) {
             return isRational(n) && n->value.isZero();
@@ -92,8 +78,6 @@ namespace CAS {
 
         /** @name isOne
          *  @brief Check if a node represents the rational number one
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with value 1, false otherwise
          */
         inline bool isOne(Exptree* n) {
             return isRational(n) && n->value == Rational(Intg(1));
@@ -101,8 +85,6 @@ namespace CAS {
 
         /** @name isMinusOne
          *  @brief Check if a node represents the rational number negative one
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with value -1, false otherwise
          */
         inline bool isMinusOne(Exptree* n) {
             return isRational(n) && n->value == Rational(Intg(-1));
@@ -110,8 +92,6 @@ namespace CAS {
 
         /** @name isPositive
          *  @brief Check if a node is a strictly positive rational number
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with value greater than 0, false otherwise
          */
         inline bool isPositive(Exptree* n) {
             return isRational(n) && n->value > Rational(Intg(0));
@@ -119,8 +99,6 @@ namespace CAS {
 
         /** @name isNegative
          *  @brief Check if a node is a strictly negative rational number
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with value less than 0, false otherwise
          */
         inline bool isNegative(Exptree* n) {
             return isRational(n) && n->value < Rational(Intg(0));
@@ -128,8 +106,6 @@ namespace CAS {
 
         /** @name isInteger
          *  @brief Check if a node is a rational with denominator 1 (integer value)
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a rational with denominator equal to 1, false otherwise
          */
         inline bool isInteger(Exptree* n) {
             return isRational(n) && n->value.isInteger();
@@ -137,8 +113,6 @@ namespace CAS {
 
         /** @name isEvenInteger
          *  @brief Check if a node is an even integer rational number
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is an integer and its numerator is even, false otherwise
          */
         inline bool isEvenInteger(Exptree* n) {
             if (!isInteger(n)) return false;
@@ -148,8 +122,6 @@ namespace CAS {
 
         /** @name isConstantE
          *  @brief Check if a node represents the mathematical constant e
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a variable with name ConstName::e, false otherwise
          */
         inline bool isConstantE(Exptree* n) {
             return isVariable(n) && n->var == ConstName::e;
@@ -157,17 +129,20 @@ namespace CAS {
 
         /** @name isConstantPi
          *  @brief Check if a node represents the mathematical constant pi
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a variable with name ConstName::pi, false otherwise
          */
         inline bool isConstantPi(Exptree* n) {
             return isVariable(n) && n->var == ConstName::pi;
         }
 
+        /** @name isConstantPhi
+         *  @brief Check if a node represents the golden ratio phi
+         */
+        inline bool isConstantPhi(Exptree* n) {
+            return isVariable(n) && n->var == ConstName::phi;
+        }
+
         /** @name isConstantI
          *  @brief Check if a node represents the imaginary unit i
-         *  @param n Pointer to the expression tree node to check
-         *  @return true if the node is a variable with name ConstName::i, false otherwise
          */
         inline bool isConstantI(Exptree* n) {
             return isVariable(n) && n->var == ConstName::i;
@@ -175,8 +150,6 @@ namespace CAS {
 
         /** @name makeRational
          *  @brief Create a new rational number node from the object pool
-         *  @param v The rational value to store in the node
-         *  @return Pointer to newly allocated expression tree node
          */
         inline Exptree* makeRational(const Rational& v) {
             Exptree* n = g_pool.allocate();
@@ -187,8 +160,6 @@ namespace CAS {
 
         /** @name makeVariable
          *  @brief Create a new variable node from the object pool
-         *  @param name C-string variable name
-         *  @return Pointer to newly allocated expression tree node
          */
         inline Exptree* makeVariable(const char* name) {
             Exptree* n = g_pool.allocate();
@@ -199,8 +170,6 @@ namespace CAS {
 
         /** @name makeFunction
          *  @brief Create a new function node from the object pool
-         *  @param name C-string function or operator name
-         *  @return Pointer to newly allocated expression tree node with empty child list
          */
         inline Exptree* makeFunction(const char* name) {
             Exptree* n = g_pool.allocate();
@@ -218,13 +187,6 @@ namespace CAS {
     /**
      *  @class ExptreePool
      *  @brief Fixed-size object pool for Exptree nodes
-     *  @details Manages a pre-allocated pool of Exptree nodes to minimize dynamic memory
-     *           allocation on memory-constrained embedded platforms like Raspberry Pi Pico (RP2040).
-     *           The pool size is tuned to balance memory usage (~10KB) with practical expression
-     *           complexity. When the pool is exhausted, falls back to standard heap allocation.
-     *
-     *           Each pool entry reserves space for up to MAX_CHILDREN child pointers to avoid
-     *           vector reallocation during tree construction.
      */
     class ExptreePool {
         /** @name POOL_SIZE
@@ -239,7 +201,7 @@ namespace CAS {
          */
         static constexpr size_t MAX_CHILDREN = 6;
 
-        /** @struct PoolNode
+        /** @name PoolNode
          *  @brief Internal structure representing a single pool entry
          */
         struct PoolNode {
@@ -254,7 +216,7 @@ namespace CAS {
             }
         };
 
-        PoolNode pool_[POOL_SIZE];  ///< Fixed array of pool entries
+        PoolNode pool_[POOL_SIZE];
 
     public:
         /** @name allocate
@@ -319,44 +281,13 @@ namespace CAS {
             }
             return count;
         }
-    }; // class ExptreePool
+    };
 
-    /**
-     *  @name g_pool
-     *  @brief Global instance of the ExptreePool
-     *  @details Single global pool shared by all simplification operations.
-     *           Declared extern here, defined in the implementation section.
-     */
     extern ExptreePool g_pool;
 
     /**
      *  @class TreeSimplifier
      *  @brief Expression tree simplifier implementing symbolic algebra rules
-     *  @details Provides a complete symbolic expression simplifier designed for embedded
-     *           computer algebra systems. Uses recursive bottom-up simplification with
-     *           the following major phases:
-     *
-     *           1. **Preprocessing**: Normalizes expressions by converting subtraction to
-     *              addition of negative terms, division to multiplication by reciprocal powers,
-     *              sqrt to exponent form, exp(x) to e^x, and flattening nested same-operator trees.
-     *
-     *           2. **Recursive simplification**: Bottom-up traversal applying algebraic rules
-     *              including constant folding, like-term collection, power law combination,
-     *              trigonometric identities, logarithmic identities, and complex number support
-     *              (Euler's formula, i^n cycle, sqrt(-1) -> i).
-     *
-     *           3. **Memory management**: Uses the ExptreePool for allocation to minimize
-     *              heap fragmentation on embedded platforms. Work buffers are reused across
-     *              simplification calls to avoid repeated allocation.
-     *
-     *           The simplifier supports the following operations and functions:
-     *           - Arithmetic: addition, multiplication, exponentiation, negation
-     *           - Trigonometric: sin, cos, tan, asin, acos, atan
-     *           - Hyperbolic: sinh, cosh, tanh
-     *           - Logarithmic: ln, log (arbitrary base)
-     *           - Other: abs, signum, factorial
-     *           - Complex: i, sqrt(-1), Euler's formula
-     *           - Constants: e, pi, i
      */
     class TreeSimplifier {
     public:
@@ -377,9 +308,6 @@ namespace CAS {
         static Exptree* simplify(Exptree*& root);
 
     private:
-        /** @name TreeSimplifier
-         *  @brief Private default constructor for singleton pattern
-         */
         TreeSimplifier() = default;
 
         // Non-copyable
@@ -397,7 +325,7 @@ namespace CAS {
         }
 
         /**
-         *  @struct WorkBuffer
+         *  @name WorkBuffer
          *  @brief Reusable buffer for collecting and merging terms during simplification
          *  @details Avoids dynamic allocation during recursive simplification by providing
          *           fixed-size arrays. The same buffer instances are reused across multiple
@@ -445,7 +373,7 @@ namespace CAS {
         WorkBuffer mulBuf_;  ///< Work buffer for multiplication operations
 
         // ========== Preprocessing phase ==========
-
+                
         /** @name preTransform
          *  @brief Normalize expression forms before simplification
          *  @param node Reference to node pointer (may be restructured in-place)
@@ -472,326 +400,126 @@ namespace CAS {
         Exptree* simplifyNode(Exptree* node);
 
         // ========== Arithmetic operation simplifiers ==========
-
-        /** @name simplifyAdd
-         *  @brief Simplify an addition expression
-         *  @param node Addition node to simplify
-         *  @return Simplified expression
-         *  @details Collects all terms (flattening nested additions), merges like terms
-         *           by combining their coefficients, and rebuilds the sum in canonical order.
-         *  @example
-         *  Input:  ((+) 3 ((*) 2 x) ((*) -1 x) 4)
-         *  Output: ((+) 7 x)   // (3+4) + (2x + -1x) = 7 + x
-         */
         Exptree* simplifyAdd(Exptree* node);
-
-        /** @name simplifyMul
-         *  @brief Simplify a multiplication expression
-         *  @param node Multiplication node to simplify
-         *  @return Simplified expression
-         *  @details Collects all factors (flattening nested multiplications), merges like
-         *           bases by adding exponents (x^a * x^b = x^(a+b)), and rebuilds in canonical order.
-         */
         Exptree* simplifyMul(Exptree* node);
-
-        /** @name simplifyPow
-         *  @brief Simplify an exponentiation expression
-         *  @param node Power node to simplify
-         *  @return Simplified expression
-         *  @details Applies power rules including:
-         *           - 0^x = 0, x^0 = 1, x^1 = x, 1^x = 1
-         *           - Constant folding for rational base and exponent
-         *           - (-1)^n cycle detection
-         *           - i^n cycle: i^1=i, i^2=-1, i^3=-i, i^4=1
-         *           - sqrt(-1) = i detection
-         *           - (x^a)^b = x^(a*b) when safe
-         *           - Euler's formula: e^(i*theta) = cos(theta) + i*sin(theta)
-         *           - Power distribution: (a*b)^n = a^n * b^n for integer n
-         */
         Exptree* simplifyPow(Exptree* node);
-
-        /** @name simplifyNeg
-         *  @brief Simplify a unary negation expression
-         *  @param node Negation node to simplify
-         *  @return Simplified expression
-         *  @details -0 = 0, -(-x) = x, -n = -n (rational), otherwise -> (-1)*x
-         */
         Exptree* simplifyNeg(Exptree* node);
 
         // ========== Function simplifiers ==========
-
-        /** @name simplifySqrt
-         *  @brief Simplify a square root expression
-         *  @param node Square root node
-         *  @return Simplified expression
-         *  @details sqrt(0)=0, sqrt(1)=1, extracts perfect square factors from rationals,
-         *           sqrt(x^2)=abs(x), sqrt(-1)=i, sqrt(-a)=i*sqrt(a) for a>0
-         */
         Exptree* simplifySqrt(Exptree* node);
-
-        /** @name simplifyAbs
-         *  @brief Simplify an absolute value expression
-         *  @param node Absolute value node
-         *  @return Simplified expression
-         *  @details abs(0)=0, abs(abs(x))=abs(x), abs(n)=n for n>0, abs(-n)=n for n<0,
-         *           abs(-x)=abs(x), abs(x*y)=abs(x)*abs(y), abs(x^n)=abs(x)^n for even n
-         */
         Exptree* simplifyAbs(Exptree* node);
-
-        /** @name simplifyLn
-         *  @brief Simplify a natural logarithm expression
-         *  @param node Natural log node
-         *  @return Simplified expression
-         *  @details ln(1)=0, ln(e)=1 (exact, using ConstName::e), ln(e^x)=x,
-         *           ln(x^a)=a*ln(x) for x>0
-         */
         Exptree* simplifyLn(Exptree* node);
-
-        /** @name simplifySin
-         *  @brief Simplify a sine expression
-         *  @param node Sine node
-         *  @return Simplified expression
-         *  @details sin(0)=0, sin(pi)=0, sin(pi/2)=1, sin(pi/6)=1/2, sin(pi/4)=sqrt(2)/2,
-         *           sin(pi/3)=sqrt(3)/2, sin(-x)=-sin(x)
-         */
         Exptree* simplifySin(Exptree* node);
-
-        /** @name simplifyCos
-         *  @brief Simplify a cosine expression
-         *  @param node Cosine node
-         *  @return Simplified expression
-         *  @details cos(0)=1, cos(pi)=-1, cos(pi/2)=0, cos(pi/3)=1/2,
-         *           cos(pi/4)=sqrt(2)/2, cos(pi/6)=sqrt(3)/2, cos(-x)=cos(x)
-         */
         Exptree* simplifyCos(Exptree* node);
-
-        /** @name simplifyTan
-         *  @brief Simplify a tangent expression
-         *  @param node Tangent node
-         *  @return Simplified expression
-         *  @details tan(0)=0, tan(pi)=0, tan(pi/4)=1, tan(-x)=-tan(x)
-         */
         Exptree* simplifyTan(Exptree* node);
-
-        /** @name simplifyAsin
-         *  @brief Simplify an arcsine expression
-         *  @param node Arcsine node
-         *  @return Simplified expression
-         *  @details asin(0)=0, asin(1)=pi/2, asin(1/2)=pi/6
-         */
         Exptree* simplifyAsin(Exptree* node);
-
-        /** @name simplifyAcos
-         *  @brief Simplify an arccosine expression
-         *  @param node Arccosine node
-         *  @return Simplified expression
-         *  @details acos(0)=pi/2, acos(1)=0, acos(1/2)=pi/3
-         */
         Exptree* simplifyAcos(Exptree* node);
-
-        /** @name simplifyAtan
-         *  @brief Simplify an arctangent expression
-         *  @param node Arctangent node
-         *  @return Simplified expression
-         *  @details atan(0)=0, atan(1)=pi/4
-         */
         Exptree* simplifyAtan(Exptree* node);
-
+        
         /** @name simplifySinh
-         *  @brief Simplify a hyperbolic sine expression
-         *  @param node Hyperbolic sine node
-         *  @return Simplified expression
-         *  @details sinh(0)=0
+         *  @brief Convert hyperbolic sine to exponential form: sinh(x) = (e^x - e^(-x))/2
          */
         Exptree* simplifySinh(Exptree* node);
-
+        
         /** @name simplifyCosh
-         *  @brief Simplify a hyperbolic cosine expression
-         *  @param node Hyperbolic cosine node
-         *  @return Simplified expression
-         *  @details cosh(0)=1
+         *  @brief Convert hyperbolic cosine to exponential form: cosh(x) = (e^x + e^(-x))/2
          */
         Exptree* simplifyCosh(Exptree* node);
-
+        
         /** @name simplifyTanh
-         *  @brief Simplify a hyperbolic tangent expression
-         *  @param node Hyperbolic tangent node
-         *  @return Simplified expression
-         *  @details tanh(0)=0
+         *  @brief Convert hyperbolic tangent to exponential form or sinh/cosh ratio
          */
         Exptree* simplifyTanh(Exptree* node);
+        
+        /** @name simplifyAsinh
+         *  @brief Simplify inverse hyperbolic sine: asinh(x) = ln(x + sqrt(x^2 + 1))
+         */
+        Exptree* simplifyAsinh(Exptree* node);
+        
+        /** @name simplifyAcosh
+         *  @brief Simplify inverse hyperbolic cosine: acosh(x) = ln(x + sqrt(x^2 - 1)) for x >= 1
+         */
+        Exptree* simplifyAcosh(Exptree* node);
+        
+        /** @name simplifyAtanh
+         *  @brief Simplify inverse hyperbolic tangent: atanh(x) = (1/2)*ln((1+x)/(1-x)) for |x| < 1
+         */
+        Exptree* simplifyAtanh(Exptree* node);
 
         /** @name simplifyLog
          *  @brief Simplify a general logarithm expression
-         *  @param node Logarithm node (log_b(a) with optional base)
-         *  @return Simplified expression
-         *  @details log(1)=0, log(x,x)=1, log(x,e)=ln(x), log(x,10) uses log10,
-         *           otherwise converts to ln(a)/ln(b)
          */
         Exptree* simplifyLog(Exptree* node);
-
+        
+        /** @name simplifyLog10
+         *  @brief Simplify base-10 logarithm with special value recognition
+         */
+        Exptree* simplifyLog10(Exptree* node);
+        
         /** @name simplifySignum
          *  @brief Simplify a signum expression
-         *  @param node Signum node
-         *  @return Simplified expression
-         *  @details signum(0)=0, signum(n>0)=1, signum(n<0)=-1,
-         *           signum(signum(x))=signum(x), signum(-x)=-signum(x),
-         *           signum(x*y)=signum(x)*signum(y), signum(abs(x))=1
          */
         Exptree* simplifySignum(Exptree* node);
-
+        
         /** @name simplifyFact
          *  @brief Simplify a factorial expression
-         *  @param node Factorial node
-         *  @return Simplified expression
-         *  @details 0!=1, 1!=1, n! computed for small positive integers (n <= 20)
          */
         Exptree* simplifyFact(Exptree* node);
+        
+        /** @name simplifyDeg
+         *  @brief Convert degrees to radians: deg(x) = (pi/180)*x
+         */
+        Exptree* simplifyDeg(Exptree* node);
+        
+        /** @name simplifyRad
+         *  @brief Convert radians to degrees: rad(x) = (180/pi)*x
+         */
+        Exptree* simplifyRad(Exptree* node);
 
         // ========== Addition internal methods ==========
-
-        /** @name collectAddTerms
-         *  @brief Recursively collect all terms of an addition into a flat buffer
-         *  @param node Current node being traversed
-         *  @param buf WorkBuffer to collect terms into
-         *  @details Recursively flattens nested addition nodes, accumulates rational
-         *           constants, and collects non-constant terms.
-         */
         void collectAddTerms(Exptree* node, WorkBuffer& buf);
-
-        /** @name mergeAddTerms
-         *  @brief Merge like terms in the collected addition buffer
-         *  @param buf WorkBuffer containing collected terms
-         *  @details Identifies terms with matching structure (ignoring rational coefficients)
-         *           and combines their coefficients. Terms with zero coefficient after merging
-         *           are removed.
-         */
         void mergeAddTerms(WorkBuffer& buf);
-
-        /** @name rebuildAdd
-         *  @brief Rebuild a canonical addition expression from collected terms
-         *  @param buf WorkBuffer containing merged terms
-         *  @return Newly built addition node or simplified single term
-         *  @details Adds the accumulated constant, sorts terms, and creates the final
-         *           expression. Returns a single term if only one remains.
-         */
         Exptree* rebuildAdd(WorkBuffer& buf);
 
         // ========== Multiplication internal methods ==========
-
-        /** @name collectMulFactors
-         *  @brief Recursively collect all factors of a product into a flat buffer
-         *  @param node Current node being traversed
-         *  @param buf WorkBuffer to collect factors into
-         *  @details Recursively flattens nested multiplication nodes, accumulates rational
-         *           constants, and collects non-constant factors.
-         */
         void collectMulFactors(Exptree* node, WorkBuffer& buf);
-
-        /** @name mergeMulFactors
-         *  @brief Merge like factors in the collected multiplication buffer
-         *  @param buf WorkBuffer containing collected factors
-         *  @details Combines factors with the same base by adding exponents:
-         *           x^a * x^b = x^(a+b). Factors of 1 are removed.
-         */
         void mergeMulFactors(WorkBuffer& buf);
-
-        /** @name rebuildMul
-         *  @brief Rebuild a canonical multiplication expression from collected factors
-         *  @param buf WorkBuffer containing merged factors
-         *  @return Newly built multiplication node or simplified single factor
-         *  @details Multiplies the accumulated constant, sorts factors, and creates the
-         *           final expression. Returns a single factor if only one remains.
-         *           Zero constant results in 0.
-         */
         Exptree* rebuildMul(WorkBuffer& buf);
 
         // ========== Power internal methods ==========
-
-        /** @name foldRationalPower
-         *  @brief Attempt to compute an exact rational power of a rational base
-         *  @param base Base node (must be rational)
-         *  @param exp Exponent node (must be rational)
-         *  @return Pointer to result node, or nullptr if exact computation is not possible
-         *  @details Handles integer exponents using Intg::pow. For rational exponents,
-         *           attempts exact computation when the result is rational.
-         */
         Exptree* foldRationalPower(Exptree* base, Exptree* exp);
-
-        /** @name isPerfectSquare
-         *  @brief Check if a rational number is a perfect square
-         *  @param r Rational number to check
-         *  @param root Output parameter receiving the square root if perfect square
-         *  @return true if r is a perfect square, false otherwise
-         *  @details Uses Intg::sqrt on numerator and denominator separately.
-         */
         bool isPerfectSquare(const Rational& r, Rational& root);
-
-        /** @name simplifyEulerForm
-         *  @brief Apply Euler's formula to e^(i*theta)
-         *  @param expArg The exponent argument (should contain i factor)
-         *  @return cos(theta) + i*sin(theta) node, or nullptr if not applicable
-         *  @details Recognizes patterns like e^(i*x), e^(i*pi*x), etc.
-         */
         Exptree* simplifyEulerForm(Exptree* expArg);
 
-        // ========== Complex number support ==========
-
-        /** @name handleComplexSqrt
-         *  @brief Convert sqrt(-a) to i*sqrt(a) for a > 0
-         *  @param node Power node with exponent 1/2
-         *  @return Simplified node or nullptr if pattern doesn't match
-         *  @details Detects patterns like (-1)^(1/2) -> i, (-a)^(1/2) -> i*sqrt(a)
+        // ========== Trigonometric helper ==========
+        /** @name simplifyTrigSpecialAngles
+         *  @brief Recognize and simplify trigonometric functions for special angles
+         *  @param node The trig function node
+         *  @param funcName The trig function name ("sin", "cos", "tan")
+         *  @return Simplified expression or nullptr if not a special angle
+         *  @details Handles angles: 0, pi, pi/2, pi/3, pi/4, pi/6, pi/5 (36°), pi/10 (18°)
          */
+        Exptree* simplifyTrigSpecialAngles(Exptree* node, const char* funcName);
+
+        // ========== Complex number support ==========
         Exptree* handleComplexSqrt(Exptree* node);
 
         // ========== Sorting ==========
-
-        /** @name sortItems
-         *  @brief Sort an array of expression pointers using bubble sort
-         *  @param items Array of expression node pointers
-         *  @param count Number of items in the array
-         *  @details Uses bubble sort which is efficient for the small arrays typical
-         *           in embedded CAS usage (usually < 10 items). Sorting ensures
-         *           canonical expression ordering.
-         */
         void sortItems(Exptree** items, size_t count);
     };
 
-    // ============================================================================
     // Global pool instance
-    // ============================================================================
-
-    /**
-     *  @name g_pool
-     *  @brief Global ExptreePool instance for the CAS module
-     */
     ExptreePool g_pool;
 
     // ============================================================================
-    // SimpUtil deep copy and utility implementations
+    // SimpUtil implementations
     // ============================================================================
     namespace SimpUtil {
 
-        /** @name deepCopy
-         *  @brief Create a deep copy of an expression tree
-         *  @param src Pointer to the source node to copy
-         *  @return Pointer to an independently allocated copy of the entire subtree
-         *  @details Allocates new nodes from the object pool. The copy is completely
-         *           independent of the original and can be modified without affecting it.
-         *  @example
-         *  @code
-         *  Exptree* original = makeRational(Rational(Intg(3), Intg(2)));
-         *  Exptree* copy = SimpUtil::deepCopy(original);
-         *  // copy and original are now independent
-         *  @endcode
-         */
         Exptree* deepCopy(Exptree* src) {
             if (!src) return nullptr;
-
             Exptree* copy = g_pool.allocate();
             copy->valtp = src->valtp;
-
             if (src->valtp == Exptree::val_t::valRational) {
                 copy->value = src->value;
             } else if (src->valtp == Exptree::val_t::valVariable) {
@@ -802,75 +530,45 @@ namespace CAS {
                     copy->child.push_back(deepCopy(src->child[i]));
                 }
             }
-
             return copy;
         }
 
-        /** @name freeTree
-         *  @brief Recursively free an entire expression tree
-         *  @param root Pointer to the root node of the tree to free
-         *  @details Returns all nodes in the subtree to the object pool.
-         *           Safe to call with nullptr.
-         */
         void freeTree(Exptree* root) {
-            if (root) {
-                g_pool.deallocate(root);
-            }
+            if (root) g_pool.deallocate(root);
         }
 
-        /** @name compareNodes
-         *  @brief Compare two expression nodes for canonical ordering
-         *  @param a Pointer to first node
-         *  @param b Pointer to second node
-         *  @return Negative value if a < b, zero if equal, positive value if a > b
-         *  @details Ordering priority: Rational < Variable < Function.
-         *           Rationals compared by value, Variables by name, Functions by name then children.
-         */
         int8_t compareNodes(Exptree* a, Exptree* b) {
             if (!a && !b) return 0;
             if (!a) return -1;
             if (!b) return 1;
-
             if (a->valtp != b->valtp) {
                 return static_cast<int8_t>(a->valtp) - static_cast<int8_t>(b->valtp);
             }
-
             if (a->valtp == Exptree::val_t::valRational) {
                 if (a->value < b->value) return -1;
                 if (a->value > b->value) return 1;
                 return 0;
             }
-
             if (a->valtp == Exptree::val_t::valVariable) {
                 if (a->var < b->var) return -1;
                 if (a->var > b->var) return 1;
                 return 0;
             }
-
             if (a->valtp == Exptree::val_t::valFunction) {
                 if (a->var < b->var) return -1;
                 if (a->var > b->var) return 1;
-
-                size_t minSz = (a->child.size() < b->child.size())
-                            ? a->child.size() : b->child.size();
+                size_t minSz = (a->child.size() < b->child.size()) ? a->child.size() : b->child.size();
                 for (size_t i = 0; i < minSz; ++i) {
                     int8_t cmp = compareNodes(a->child[i], b->child[i]);
                     if (cmp != 0) return cmp;
                 }
-
                 if (a->child.size() < b->child.size()) return -1;
                 if (a->child.size() > b->child.size()) return 1;
                 return 0;
             }
-
             return 0;
         }
 
-        /** @name isNumeric
-         *  @brief Check if an expression tree contains only rational numbers
-         *  @param n Pointer to the root node to check
-         *  @return true if all leaf nodes in the tree are rational numbers, false otherwise
-         */
         bool isNumeric(Exptree* n) {
             if (!n) return false;
             if (n->valtp == Exptree::val_t::valRational) return true;
@@ -888,24 +586,19 @@ namespace CAS {
 
     void TreeSimplifier::preTransform(Exptree*& node) {
         if (!node) return;
-
-        // Recursively transform children first (bottom-up)
         for (size_t i = 0; i < node->child.size(); ++i) {
             preTransform(node->child[i]);
         }
-
         if (!SimpUtil::isFunction(node)) return;
 
-        // ---- Subtraction a - b  ->  a + (-1)*b ----
+        // ---- Subtraction a - b -> a + (-1)*b ----
         if (node->var == "-" && node->child.size() == 2) {
             Exptree* a = node->child[0];
             Exptree* b = node->child[1];
-
             Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
             Exptree* mul = SimpUtil::makeFunction("*");
             mul->child.push_back(negOne);
             mul->child.push_back(b);
-
             node->var = "+";
             node->child.clear();
             node->child.push_back(a);
@@ -913,7 +606,7 @@ namespace CAS {
             return;
         }
 
-        // ---- Unary minus -x  ->  (-1)*x ----
+        // ---- Unary minus -x -> (-1)*x ----
         if (node->var == "-" && node->child.size() == 1) {
             Exptree* arg = node->child[0];
             node->var = "*";
@@ -923,16 +616,14 @@ namespace CAS {
             return;
         }
 
-        // ---- Division a/b  ->  a * b^(-1) ----
+        // ---- Division a/b -> a * b^(-1) ----
         if (node->var == "/" && node->child.size() == 2) {
             Exptree* a = node->child[0];
             Exptree* b = node->child[1];
-
             Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
             Exptree* powNode = SimpUtil::makeFunction("^");
             powNode->child.push_back(b);
             powNode->child.push_back(negOne);
-
             node->var = "*";
             node->child.clear();
             node->child.push_back(a);
@@ -940,7 +631,7 @@ namespace CAS {
             return;
         }
 
-        // ---- sqrt(x)  ->  x^(1/2) ----
+        // ---- sqrt(x) -> x^(1/2) ----
         if (node->var == FuncName::sqrt && node->child.size() == 1) {
             Exptree* arg = node->child[0];
             node->var = "^";
@@ -954,12 +645,10 @@ namespace CAS {
         if (node->var == FuncName::root && node->child.size() == 2) {
             Exptree* degree = node->child[0];
             Exptree* radicand = node->child[1];
-
             Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
             Exptree* invDeg = SimpUtil::makeFunction("^");
             invDeg->child.push_back(degree);
             invDeg->child.push_back(negOne);
-
             node->var = "^";
             node->child.clear();
             node->child.push_back(radicand);
@@ -967,13 +656,210 @@ namespace CAS {
             return;
         }
 
-        // ---- exp(x)  ->  e^x ----
+        // ---- exp(x) -> e^x ----
         if (node->var == FuncName::exp && node->child.size() == 1) {
             Exptree* arg = node->child[0];
             node->var = "^";
             node->child.clear();
             node->child.push_back(SimpUtil::makeVariable(ConstName::e));
             node->child.push_back(arg);
+            return;
+        }
+
+        // ---- Golden ratio phi -> (sqrt(5) + 1) / 2 ----
+        if (SimpUtil::isConstantPhi(node)) {
+            Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
+            sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
+            Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+            Exptree* sum = SimpUtil::makeFunction("+");
+            sum->child.push_back(sqrt5);
+            sum->child.push_back(one);
+            Exptree* two = SimpUtil::makeRational(Rational(Intg(2)));
+            node->var = "/";
+            node->child.clear();
+            node->child.push_back(sum);
+            node->child.push_back(two);
+            return;
+        }
+
+        // ---- deg(x) -> (pi/180) * x ----
+        if (node->var == FuncName::deg && node->child.size() == 1) {
+            Exptree* arg = node->child[0];
+            Exptree* piDiv180 = SimpUtil::makeRational(Rational(Intg(1), Intg(180)));
+            Exptree* piMul = SimpUtil::makeFunction("*");
+            piMul->child.push_back(piDiv180);
+            piMul->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            node->var = "*";
+            node->child.clear();
+            node->child.push_back(piMul);
+            node->child.push_back(arg);
+            return;
+        }
+
+        // ---- rad(x) -> (180/pi) * x ----
+        if (node->var == FuncName::rad && node->child.size() == 1) {
+            Exptree* arg = node->child[0];
+            Exptree* piInv = SimpUtil::makeFunction("^");
+            piInv->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            piInv->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            Exptree* coeff = SimpUtil::makeRational(Rational(Intg(180)));
+            Exptree* fullCoeff = SimpUtil::makeFunction("*");
+            fullCoeff->child.push_back(coeff);
+            fullCoeff->child.push_back(piInv);
+            node->var = "*";
+            node->child.clear();
+            node->child.push_back(fullCoeff);
+            node->child.push_back(arg);
+            return;
+        }
+
+        // ---- sinh(x) -> (e^x - e^(-x)) / 2 ----
+        if (node->var == FuncName::sinh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* e = SimpUtil::makeVariable(ConstName::e);
+            Exptree* e_x = SimpUtil::makeFunction("^");
+            e_x->child.push_back(SimpUtil::deepCopy(e));
+            e_x->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* negX = SimpUtil::makeFunction("*");
+            negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negX->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* e_negX = SimpUtil::makeFunction("^");
+            e_negX->child.push_back(SimpUtil::deepCopy(e));
+            e_negX->child.push_back(negX);
+            Exptree* negE = SimpUtil::makeFunction("*");
+            negE->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negE->child.push_back(e_negX);
+            Exptree* diff = SimpUtil::makeFunction("+");
+            diff->child.push_back(e_x);
+            diff->child.push_back(negE);
+            node->var = "/";
+            node->child.clear();
+            node->child.push_back(diff);
+            node->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+            return;
+        }
+
+        // ---- cosh(x) -> (e^x + e^(-x)) / 2 ----
+        if (node->var == FuncName::cosh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* e = SimpUtil::makeVariable(ConstName::e);
+            Exptree* e_x = SimpUtil::makeFunction("^");
+            e_x->child.push_back(SimpUtil::deepCopy(e));
+            e_x->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* negX = SimpUtil::makeFunction("*");
+            negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negX->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* e_negX = SimpUtil::makeFunction("^");
+            e_negX->child.push_back(SimpUtil::deepCopy(e));
+            e_negX->child.push_back(negX);
+            Exptree* sum = SimpUtil::makeFunction("+");
+            sum->child.push_back(e_x);
+            sum->child.push_back(e_negX);
+            node->var = "/";
+            node->child.clear();
+            node->child.push_back(sum);
+            node->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+            return;
+        }
+
+        // ---- tanh(x) -> (e^x - e^(-x)) / (e^x + e^(-x)) ----
+        if (node->var == FuncName::tanh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* e = SimpUtil::makeVariable(ConstName::e);
+            Exptree* e_x = SimpUtil::makeFunction("^");
+            e_x->child.push_back(SimpUtil::deepCopy(e));
+            e_x->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* negX = SimpUtil::makeFunction("*");
+            negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negX->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* e_negX = SimpUtil::makeFunction("^");
+            e_negX->child.push_back(SimpUtil::deepCopy(e));
+            e_negX->child.push_back(negX);
+            Exptree* num = SimpUtil::makeFunction("+");
+            num->child.push_back(SimpUtil::deepCopy(e_x));
+            Exptree* negE_negX = SimpUtil::makeFunction("*");
+            negE_negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negE_negX->child.push_back(e_negX);
+            num->child.push_back(negE_negX);
+            Exptree* den = SimpUtil::makeFunction("+");
+            den->child.push_back(e_x);
+            den->child.push_back(SimpUtil::deepCopy(e_negX));
+            SimpUtil::freeTree(e_negX);
+            node->var = "/";
+            node->child.clear();
+            node->child.push_back(num);
+            node->child.push_back(den);
+            return;
+        }
+
+        // ---- asinh(x) -> ln(x + sqrt(x^2 + 1)) ----
+        if (node->var == FuncName::asinh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* xSq = SimpUtil::makeFunction("^");
+            xSq->child.push_back(SimpUtil::deepCopy(x));
+            xSq->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+            Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+            Exptree* sum = SimpUtil::makeFunction("+");
+            sum->child.push_back(xSq);
+            sum->child.push_back(one);
+            Exptree* sqrtNode = SimpUtil::makeFunction(FuncName::sqrt);
+            sqrtNode->child.push_back(sum);
+            Exptree* sum2 = SimpUtil::makeFunction("+");
+            sum2->child.push_back(SimpUtil::deepCopy(x));
+            sum2->child.push_back(sqrtNode);
+            node->var = FuncName::ln;
+            node->child.clear();
+            node->child.push_back(sum2);
+            return;
+        }
+
+        // ---- acosh(x) -> ln(x + sqrt(x^2 - 1)) ----
+        if (node->var == FuncName::acosh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* xSq = SimpUtil::makeFunction("^");
+            xSq->child.push_back(SimpUtil::deepCopy(x));
+            xSq->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+            Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+            Exptree* diff = SimpUtil::makeFunction("+");
+            diff->child.push_back(xSq);
+            Exptree* negOne = SimpUtil::makeFunction("*");
+            negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negOne->child.push_back(SimpUtil::deepCopy(one));
+            diff->child.push_back(negOne);
+            Exptree* sqrtNode = SimpUtil::makeFunction(FuncName::sqrt);
+            sqrtNode->child.push_back(diff);
+            Exptree* sum2 = SimpUtil::makeFunction("+");
+            sum2->child.push_back(SimpUtil::deepCopy(x));
+            sum2->child.push_back(sqrtNode);
+            node->var = FuncName::ln;
+            node->child.clear();
+            node->child.push_back(sum2);
+            return;
+        }
+
+        // ---- atanh(x) -> (1/2) * ln((1+x)/(1-x)) ----
+        if (node->var == FuncName::atanh && node->child.size() == 1) {
+            Exptree* x = node->child[0];
+            Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+            Exptree* num = SimpUtil::makeFunction("+");
+            num->child.push_back(SimpUtil::deepCopy(one));
+            num->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* negX = SimpUtil::makeFunction("*");
+            negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negX->child.push_back(SimpUtil::deepCopy(x));
+            Exptree* den = SimpUtil::makeFunction("+");
+            den->child.push_back(SimpUtil::deepCopy(one));
+            den->child.push_back(negX);
+            Exptree* div = SimpUtil::makeFunction("/");
+            div->child.push_back(num);
+            div->child.push_back(den);
+            Exptree* lnNode = SimpUtil::makeFunction(FuncName::ln);
+            lnNode->child.push_back(div);
+            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+            node->var = "*";
+            node->child.clear();
+            node->child.push_back(half);
+            node->child.push_back(lnNode);
             return;
         }
 
@@ -998,28 +884,24 @@ namespace CAS {
 
     Exptree* TreeSimplifier::simplifyNode(Exptree* node) {
         if (!node) return nullptr;
-
-        // Rational and variable nodes are already in simplest form
         if (node->valtp == Exptree::val_t::valRational ||
             node->valtp == Exptree::val_t::valVariable) {
             return node;
         }
-
         if (node->valtp != Exptree::val_t::valFunction) return node;
 
-        // Simplify children first (bottom-up recursion)
         for (size_t i = 0; i < node->child.size(); ++i) {
             node->child[i] = simplifyNode(node->child[i]);
         }
 
         const std::string& func = node->var;
 
-        // ---- Arithmetic operators ----
+        // Arithmetic
         if (func == "+") return simplifyAdd(node);
         if (func == "*") return simplifyMul(node);
         if (func == "^") return simplifyPow(node);
 
-        // ---- Trigonometric functions ----
+        // Trigonometric
         if (func == FuncName::sin)   return simplifySin(node);
         if (func == FuncName::cos)   return simplifyCos(node);
         if (func == FuncName::tan)   return simplifyTan(node);
@@ -1027,22 +909,451 @@ namespace CAS {
         if (func == FuncName::acos)  return simplifyAcos(node);
         if (func == FuncName::atan)  return simplifyAtan(node);
 
-        // ---- Hyperbolic functions ----
+        // Hyperbolic (now converted to exponential form in preTransform, 
+        // but we keep the handlers for cases where preTransform wasn't applied)
         if (func == FuncName::sinh)  return simplifySinh(node);
         if (func == FuncName::cosh)  return simplifyCosh(node);
         if (func == FuncName::tanh)  return simplifyTanh(node);
+        if (func == FuncName::asinh) return simplifyAsinh(node);
+        if (func == FuncName::acosh) return simplifyAcosh(node);
+        if (func == FuncName::atanh) return simplifyAtanh(node);
 
-        // ---- Logarithmic functions (exp already converted to e^ in preTransform) ----
+        // Logarithmic
         if (func == FuncName::ln)    return simplifyLn(node);
         if (func == FuncName::log)   return simplifyLog(node);
+        if (func == FuncName::log10) return simplifyLog10(node);
 
-        // ---- Other elementary functions ----
+        // Other elementary functions
         if (func == FuncName::abs)   return simplifyAbs(node);
         if (func == FuncName::sign)  return simplifySignum(node);
         if (func == FuncName::fact)  return simplifyFact(node);
 
-        // ---- Unknown function, leave as-is ----
+        // Angle conversion functions (if not pre-transformed)
+        if (func == FuncName::deg)   return simplifyDeg(node);
+        if (func == FuncName::rad)   return simplifyRad(node);
+
         return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyTrigSpecialAngles(Exptree* node, const char* funcName) {
+        if (node->child.size() != 1) return nullptr;
+        Exptree* arg = node->child[0];
+        
+        // Handle zero
+        if (SimpUtil::isZero(arg)) {
+            if (std::strcmp(funcName, "sin") == 0 || std::strcmp(funcName, "tan") == 0)
+                return SimpUtil::makeRational(Rational(Intg(0)));
+            if (std::strcmp(funcName, "cos") == 0)
+                return SimpUtil::makeRational(Rational(Intg(1)));
+            return nullptr;
+        }
+        
+        // Handle pi
+        if (SimpUtil::isConstantPi(arg)) {
+            if (std::strcmp(funcName, "sin") == 0 || std::strcmp(funcName, "tan") == 0)
+                return SimpUtil::makeRational(Rational(Intg(0)));
+            if (std::strcmp(funcName, "cos") == 0)
+                return SimpUtil::makeRational(Rational(Intg(-1)));
+            return nullptr;
+        }
+        
+        // Handle k*pi patterns
+        if (SimpUtil::isFunction(arg, "*")) {
+            bool hasPi = false;
+            Rational coeff(Intg(0));
+            
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                if (SimpUtil::isConstantPi(arg->child[i])) {
+                    hasPi = true;
+                } else if (SimpUtil::isRational(arg->child[i])) {
+                    coeff = coeff + arg->child[i]->value; // Simplified: multiply fractions
+                }
+            }
+            
+            if (hasPi && coeff > Rational(Intg(0))) {
+                // Normalize coefficient to [0, 2]
+                // coeff represents k in k*pi
+                bool isSin = (std::strcmp(funcName, "sin") == 0);
+                bool isCos = (std::strcmp(funcName, "cos") == 0);
+                bool isTan = (std::strcmp(funcName, "tan") == 0);
+                
+                // sin(pi/2) = 1, cos(pi/2) = 0
+                if (coeff == Rational(Intg(1), Intg(2))) {
+                    if (isSin) return SimpUtil::makeRational(Rational(Intg(1)));
+                    if (isCos || isTan) return SimpUtil::makeRational(Rational(Intg(0)));
+                }
+                // sin(pi/3) = sqrt(3)/2, cos(pi/3) = 1/2, tan(pi/3) = sqrt(3)
+                if (coeff == Rational(Intg(1), Intg(3))) {
+                    if (isSin) {
+                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(sqrt3);
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        return result;
+                    }
+                    if (isCos) return SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                    if (isTan) {
+                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                        return sqrt3;
+                    }
+                }
+                // sin(pi/4) = cos(pi/4) = sqrt(2)/2, tan(pi/4) = 1
+                if (coeff == Rational(Intg(1), Intg(4))) {
+                    if (isSin || isCos) {
+                        Exptree* sqrt2 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(sqrt2);
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        return result;
+                    }
+                    if (isTan) return SimpUtil::makeRational(Rational(Intg(1)));
+                }
+                // sin(pi/6) = 1/2, cos(pi/6) = sqrt(3)/2, tan(pi/6) = 1/sqrt(3)
+                if (coeff == Rational(Intg(1), Intg(6))) {
+                    if (isSin) return SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                    if (isCos) {
+                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(sqrt3);
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        return result;
+                    }
+                    if (isTan) {
+                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                        result->child.push_back(sqrt3);
+                        return result;
+                    }
+                }
+                // sin(pi/5) = sqrt(10-2*sqrt(5))/4  (sin 36°)
+                // cos(pi/5) = (sqrt(5)+1)/4 = phi/2  (cos 36°)
+                if (coeff == Rational(Intg(1), Intg(5))) {
+                    if (isCos) {
+                        Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
+                        Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+                        Exptree* sum = SimpUtil::makeFunction("+");
+                        sum->child.push_back(sqrt5);
+                        sum->child.push_back(one);
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(sum);
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
+                        return result;
+                    }
+                }
+                // sin(pi/10) = (sqrt(5)-1)/4  (sin 18°)
+                // cos(pi/10) = sqrt(10+2*sqrt(5))/4  (cos 18°)
+                if (coeff == Rational(Intg(1), Intg(10))) {
+                    if (isSin) {
+                        Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
+                        sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
+                        Exptree* negOne = SimpUtil::makeFunction("*");
+                        negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                        negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                        Exptree* sum = SimpUtil::makeFunction("+");
+                        sum->child.push_back(sqrt5);
+                        sum->child.push_back(negOne);
+                        Exptree* result = SimpUtil::makeFunction("/");
+                        result->child.push_back(sum);
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
+                        return result;
+                    }
+                }
+            }
+        }
+        
+        return nullptr;
+    }
+
+    Exptree* TreeSimplifier::simplifySin(Exptree* node) {
+        // Try special angles first
+        Exptree* special = simplifyTrigSpecialAngles(node, "sin");
+        if (special) {
+            SimpUtil::freeTree(node);
+            return special;
+        }
+        
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+
+        // sin(0) = 0
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+
+        // sin(-x) = -sin(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
+            if (SimpUtil::isMinusOne(arg->child[0])) {
+                Exptree* inner = nullptr;
+                if (arg->child.size() == 2) {
+                    inner = SimpUtil::deepCopy(arg->child[1]);
+                } else {
+                    inner = SimpUtil::makeFunction("*");
+                    for (size_t i = 1; i < arg->child.size(); ++i) {
+                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                    }
+                }
+                Exptree* innerSin = SimpUtil::makeFunction(FuncName::sin);
+                innerSin->child.push_back(inner);
+                innerSin = simplifySin(innerSin);
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                result->child.push_back(innerSin);
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
+            }
+        }
+
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyCos(Exptree* node) {
+        Exptree* special = simplifyTrigSpecialAngles(node, "cos");
+        if (special) {
+            SimpUtil::freeTree(node);
+            return special;
+        }
+        
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // cos(-x) = cos(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
+            if (SimpUtil::isMinusOne(arg->child[0])) {
+                Exptree* inner = nullptr;
+                if (arg->child.size() == 2) {
+                    inner = SimpUtil::deepCopy(arg->child[1]);
+                } else {
+                    inner = SimpUtil::makeFunction("*");
+                    for (size_t i = 1; i < arg->child.size(); ++i) {
+                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                    }
+                }
+                Exptree* newCos = SimpUtil::makeFunction(FuncName::cos);
+                newCos->child.push_back(inner);
+                SimpUtil::freeTree(node);
+                return simplifyCos(newCos);
+            }
+        }
+
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyTan(Exptree* node) {
+        Exptree* special = simplifyTrigSpecialAngles(node, "tan");
+        if (special) {
+            SimpUtil::freeTree(node);
+            return special;
+        }
+        
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+
+        // tan(-x) = -tan(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
+            if (SimpUtil::isMinusOne(arg->child[0])) {
+                Exptree* inner = nullptr;
+                if (arg->child.size() == 2) {
+                    inner = SimpUtil::deepCopy(arg->child[1]);
+                } else {
+                    inner = SimpUtil::makeFunction("*");
+                    for (size_t i = 1; i < arg->child.size(); ++i) {
+                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                    }
+                }
+                Exptree* innerTan = SimpUtil::makeFunction(FuncName::tan);
+                innerTan->child.push_back(inner);
+                innerTan = simplifyTan(innerTan);
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                result->child.push_back(innerTan);
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
+            }
+        }
+
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyAsin(Exptree* node) {
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+        if (SimpUtil::isOne(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(half);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
+            SimpUtil::freeTree(node);
+            Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(sixth);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyAcos(Exptree* node) {
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(half);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+        if (SimpUtil::isOne(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
+            SimpUtil::freeTree(node);
+            Exptree* third = SimpUtil::makeRational(Rational(Intg(1), Intg(3)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(third);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifyAtan(Exptree* node) {
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+        if (SimpUtil::isOne(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* quarter = SimpUtil::makeRational(Rational(Intg(1), Intg(4)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(quarter);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+        return node;
+    }
+
+    Exptree* TreeSimplifier::simplifySinh(Exptree* node) {
+        // Already converted to exponential form in preTransform
+        // Apply preTransform again if needed
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyCosh(Exptree* node) {
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyTanh(Exptree* node) {
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyAsinh(Exptree* node) {
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyAcosh(Exptree* node) {
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyAtanh(Exptree* node) {
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyLog10(Exptree* node) {
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+        
+        // log10(1) = 0
+        if (SimpUtil::isOne(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(0)));
+        }
+        
+        // log10(10) = 1
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(10))) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+        
+        // log10(100) = 2
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(100))) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(2)));
+        }
+        
+        // log10(1000) = 3
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1000))) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(3)));
+        }
+        
+        // log10(1/10) = -1
+        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(10))) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(-1)));
+        }
+        
+        // Convert to natural log: log10(x) = ln(x)/ln(10)
+        Exptree* lnArg = SimpUtil::makeFunction(FuncName::ln);
+        lnArg->child.push_back(SimpUtil::deepCopy(arg));
+        Exptree* ln10 = SimpUtil::makeFunction(FuncName::ln);
+        ln10->child.push_back(SimpUtil::makeRational(Rational(Intg(10))));
+        Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
+        Exptree* invLn10 = SimpUtil::makeFunction("^");
+        invLn10->child.push_back(ln10);
+        invLn10->child.push_back(negOne);
+        Exptree* result = SimpUtil::makeFunction("*");
+        result->child.push_back(lnArg);
+        result->child.push_back(invLn10);
+        SimpUtil::freeTree(node);
+        return simplifyMul(result);
+    }
+
+    Exptree* TreeSimplifier::simplifyDeg(Exptree* node) {
+        // Already transformed in preTransform
+        preTransform(node);
+        return simplifyNode(node);
+    }
+
+    Exptree* TreeSimplifier::simplifyRad(Exptree* node) {
+        // Already transformed in preTransform
+        preTransform(node);
+        return simplifyNode(node);
     }
 
     void TreeSimplifier::collectAddTerms(Exptree* node, WorkBuffer& buf) {
@@ -1861,374 +2172,6 @@ namespace CAS {
             }
         }
 
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifySin(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // sin(0) = 0
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // sin(pi) = 0
-        if (SimpUtil::isConstantPi(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // sin(-x) = -sin(x)
-        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
-            if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
-                if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
-                } else {
-                    inner = SimpUtil::makeFunction("*");
-                    for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
-                    }
-                }
-
-                Exptree* innerSin = SimpUtil::makeFunction(FuncName::sin);
-                innerSin->child.push_back(inner);
-                innerSin = simplifySin(innerSin);
-
-                Exptree* result = SimpUtil::makeFunction("*");
-                result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-                result->child.push_back(innerSin);
-
-                SimpUtil::freeTree(node);
-                return simplifyMul(result);
-            }
-        }
-
-        // sin(k*pi) patterns
-        if (SimpUtil::isFunction(arg, "*")) {
-            bool hasPi = false;
-            Exptree* coeff = nullptr;
-
-            for (size_t i = 0; i < arg->child.size(); ++i) {
-                if (SimpUtil::isConstantPi(arg->child[i])) {
-                    hasPi = true;
-                } else if (SimpUtil::isRational(arg->child[i])) {
-                    coeff = arg->child[i];
-                }
-            }
-
-            if (hasPi && coeff) {
-                Rational c = coeff->value;
-
-                // sin(pi/2) = 1
-                if (c == Rational(Intg(1), Intg(2))) {
-                    SimpUtil::freeTree(node);
-                    return SimpUtil::makeRational(Rational(Intg(1)));
-                }
-                // sin(pi/6) = 1/2
-                if (c == Rational(Intg(1), Intg(6))) {
-                    SimpUtil::freeTree(node);
-                    return SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
-                }
-                // sin(pi/4) = sqrt(2)/2
-                if (c == Rational(Intg(1), Intg(4))) {
-                    SimpUtil::freeTree(node);
-                    Exptree* sqrt2 = SimpUtil::makeFunction(FuncName::sqrt);
-                    sqrt2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    Exptree* result = SimpUtil::makeFunction("/");
-                    result->child.push_back(sqrt2);
-                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    return result;
-                }
-                // sin(pi/3) = sqrt(3)/2
-                if (c == Rational(Intg(1), Intg(3))) {
-                    SimpUtil::freeTree(node);
-                    Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                    sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                    Exptree* result = SimpUtil::makeFunction("/");
-                    result->child.push_back(sqrt3);
-                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    return result;
-                }
-            }
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyCos(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // cos(0) = 1
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(1)));
-        }
-
-        // cos(pi) = -1
-        if (SimpUtil::isConstantPi(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(-1)));
-        }
-
-        // cos(-x) = cos(x)
-        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
-            if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
-                if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
-                } else {
-                    inner = SimpUtil::makeFunction("*");
-                    for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
-                    }
-                }
-
-                Exptree* newCos = SimpUtil::makeFunction(FuncName::cos);
-                newCos->child.push_back(inner);
-                SimpUtil::freeTree(node);
-                return simplifyCos(newCos);
-            }
-        }
-
-        // cos(k*pi) patterns
-        if (SimpUtil::isFunction(arg, "*")) {
-            bool hasPi = false;
-            Exptree* coeff = nullptr;
-
-            for (size_t i = 0; i < arg->child.size(); ++i) {
-                if (SimpUtil::isConstantPi(arg->child[i])) {
-                    hasPi = true;
-                } else if (SimpUtil::isRational(arg->child[i])) {
-                    coeff = arg->child[i];
-                }
-            }
-
-            if (hasPi && coeff) {
-                Rational c = coeff->value;
-
-                // cos(pi/2) = 0
-                if (c == Rational(Intg(1), Intg(2))) {
-                    SimpUtil::freeTree(node);
-                    return SimpUtil::makeRational(Rational(Intg(0)));
-                }
-                // cos(pi/3) = 1/2
-                if (c == Rational(Intg(1), Intg(3))) {
-                    SimpUtil::freeTree(node);
-                    return SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
-                }
-                // cos(pi/4) = sqrt(2)/2
-                if (c == Rational(Intg(1), Intg(4))) {
-                    SimpUtil::freeTree(node);
-                    Exptree* sqrt2 = SimpUtil::makeFunction(FuncName::sqrt);
-                    sqrt2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    Exptree* result = SimpUtil::makeFunction("/");
-                    result->child.push_back(sqrt2);
-                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    return result;
-                }
-                // cos(pi/6) = sqrt(3)/2
-                if (c == Rational(Intg(1), Intg(6))) {
-                    SimpUtil::freeTree(node);
-                    Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                    sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                    Exptree* result = SimpUtil::makeFunction("/");
-                    result->child.push_back(sqrt3);
-                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    return result;
-                }
-            }
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyTan(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // tan(0) = 0
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // tan(pi) = 0
-        if (SimpUtil::isConstantPi(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // tan(-x) = -tan(x)
-        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
-            if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
-                if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
-                } else {
-                    inner = SimpUtil::makeFunction("*");
-                    for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
-                    }
-                }
-
-                Exptree* innerTan = SimpUtil::makeFunction(FuncName::tan);
-                innerTan->child.push_back(inner);
-                innerTan = simplifyTan(innerTan);
-
-                Exptree* result = SimpUtil::makeFunction("*");
-                result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-                result->child.push_back(innerTan);
-
-                SimpUtil::freeTree(node);
-                return simplifyMul(result);
-            }
-        }
-
-        // tan(pi/4) = 1
-        if (SimpUtil::isFunction(arg, "*")) {
-            bool hasPi = false;
-            Exptree* coeff = nullptr;
-
-            for (size_t i = 0; i < arg->child.size(); ++i) {
-                if (SimpUtil::isConstantPi(arg->child[i])) {
-                    hasPi = true;
-                } else if (SimpUtil::isRational(arg->child[i])) {
-                    coeff = arg->child[i];
-                }
-            }
-
-            if (hasPi && coeff && coeff->value == Rational(Intg(1), Intg(4))) {
-                SimpUtil::freeTree(node);
-                return SimpUtil::makeRational(Rational(Intg(1)));
-            }
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyAsin(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // asin(0) = 0
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // asin(1) = pi/2
-        if (SimpUtil::isOne(arg)) {
-            SimpUtil::freeTree(node);
-            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
-            Exptree* result = SimpUtil::makeFunction("*");
-            result->child.push_back(half);
-            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            return result;
-        }
-
-        // asin(1/2) = pi/6
-        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
-            SimpUtil::freeTree(node);
-            Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
-            Exptree* result = SimpUtil::makeFunction("*");
-            result->child.push_back(sixth);
-            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            return result;
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyAcos(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // acos(0) = pi/2
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
-            Exptree* result = SimpUtil::makeFunction("*");
-            result->child.push_back(half);
-            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            return result;
-        }
-
-        // acos(1) = 0
-        if (SimpUtil::isOne(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // acos(1/2) = pi/3
-        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
-            SimpUtil::freeTree(node);
-            Exptree* third = SimpUtil::makeRational(Rational(Intg(1), Intg(3)));
-            Exptree* result = SimpUtil::makeFunction("*");
-            result->child.push_back(third);
-            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            return result;
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyAtan(Exptree* node) {
-        if (node->child.size() != 1) return node;
-
-        Exptree* arg = node->child[0];
-
-        // atan(0) = 0
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-
-        // atan(1) = pi/4
-        if (SimpUtil::isOne(arg)) {
-            SimpUtil::freeTree(node);
-            Exptree* quarter = SimpUtil::makeRational(Rational(Intg(1), Intg(4)));
-            Exptree* result = SimpUtil::makeFunction("*");
-            result->child.push_back(quarter);
-            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            return result;
-        }
-
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifySinh(Exptree* node) {
-        if (node->child.size() != 1) return node;
-        if (SimpUtil::isZero(node->child[0])) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyCosh(Exptree* node) {
-        if (node->child.size() != 1) return node;
-        if (SimpUtil::isZero(node->child[0])) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(1)));
-        }
-        return node;
-    }
-
-    Exptree* TreeSimplifier::simplifyTanh(Exptree* node) {
-        if (node->child.size() != 1) return node;
-        if (SimpUtil::isZero(node->child[0])) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(0)));
-        }
         return node;
     }
 
