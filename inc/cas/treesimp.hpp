@@ -26,7 +26,6 @@
 #include <algorithm>
 #include <cstring>
 
-
 namespace CAS {
 
     /**
@@ -36,9 +35,32 @@ namespace CAS {
     namespace SimpUtil {
 
         // Forward declarations
+
+        /** @name deepCopy
+         *  @brief Create a deep copy of an expression tree
+         *  @param src Pointer to the source node to copy
+         *  @return Pointer to an independently allocated copy of the entire subtree
+         *  @details Allocates new nodes from the object pool. The copy is completely
+         *           independent of the original and can be modified without affecting it.
+         */
         Exptree* deepCopy(Exptree* src);
         void freeTree(Exptree* root);
+
+        /** @name compareNodes
+         *  @brief Compare two expression nodes for canonical ordering
+         *  @param a Pointer to first node
+         *  @param b Pointer to second node
+         *  @return Negative value if a < b, zero if equal, positive value if a > b
+         *  @details Ordering priority: Rational < Variable < Function.
+         *           Rationals compared by value, Variables by name, Functions by name then children.
+         */
         int8_t compareNodes(Exptree* a, Exptree* b);
+
+        /** @name isNumeric
+         *  @brief Check if an expression tree contains only rational numbers (no variables)
+         *  @param n Pointer to the root node to check
+         *  @return true if all leaf nodes in the tree are rational numbers, false otherwise
+         */
         bool isNumeric(Exptree* n);
 
         /** @name isRational
@@ -373,7 +395,7 @@ namespace CAS {
         WorkBuffer mulBuf_;  ///< Work buffer for multiplication operations
 
         // ========== Preprocessing phase ==========
-                
+
         /** @name preTransform
          *  @brief Normalize expression forms before simplification
          *  @param node Reference to node pointer (may be restructured in-place)
@@ -417,32 +439,50 @@ namespace CAS {
         Exptree* simplifyAtan(Exptree* node);
         
         /** @name simplifySinh
-         *  @brief Convert hyperbolic sine to exponential form: sinh(x) = (e^x - e^(-x))/2
+         *  @brief Convert hyperbolic sine to exponential form
+         *  @param node Hyperbolic sine node
+         *  @return Simplified expression
+         *  @details sinh(x) = (e^x - e^(-x))/2. Conversion is done in preTransform.
          */
         Exptree* simplifySinh(Exptree* node);
         
         /** @name simplifyCosh
-         *  @brief Convert hyperbolic cosine to exponential form: cosh(x) = (e^x + e^(-x))/2
+         *  @brief Convert hyperbolic cosine to exponential form
+         *  @param node Hyperbolic cosine node
+         *  @return Simplified expression
+         *  @details cosh(x) = (e^x + e^(-x))/2. Conversion is done in preTransform.
          */
         Exptree* simplifyCosh(Exptree* node);
         
         /** @name simplifyTanh
-         *  @brief Convert hyperbolic tangent to exponential form or sinh/cosh ratio
+         *  @brief Convert hyperbolic tangent to exponential form
+         *  @param node Hyperbolic tangent node
+         *  @return Simplified expression
+         *  @details tanh(x) = (e^x - e^(-x))/(e^x + e^(-x)). Conversion is done in preTransform.
          */
         Exptree* simplifyTanh(Exptree* node);
         
         /** @name simplifyAsinh
-         *  @brief Simplify inverse hyperbolic sine: asinh(x) = ln(x + sqrt(x^2 + 1))
+         *  @brief Convert inverse hyperbolic sine to logarithmic form
+         *  @param node Inverse hyperbolic sine node
+         *  @return Simplified expression
+         *  @details asinh(x) = ln(x + sqrt(x^2 + 1)). Conversion is done in preTransform.
          */
         Exptree* simplifyAsinh(Exptree* node);
         
         /** @name simplifyAcosh
-         *  @brief Simplify inverse hyperbolic cosine: acosh(x) = ln(x + sqrt(x^2 - 1)) for x >= 1
+         *  @brief Convert inverse hyperbolic cosine to logarithmic form
+         *  @param node Inverse hyperbolic cosine node
+         *  @return Simplified expression
+         *  @details acosh(x) = ln(x + sqrt(x^2 - 1)) for x >= 1. Conversion is done in preTransform.
          */
         Exptree* simplifyAcosh(Exptree* node);
         
         /** @name simplifyAtanh
-         *  @brief Simplify inverse hyperbolic tangent: atanh(x) = (1/2)*ln((1+x)/(1-x)) for |x| < 1
+         *  @brief Convert inverse hyperbolic tangent to logarithmic form
+         *  @param node Inverse hyperbolic tangent node
+         *  @return Simplified expression
+         *  @details atanh(x) = (1/2)*ln((1+x)/(1-x)) for |x| < 1. Conversion is done in preTransform.
          */
         Exptree* simplifyAtanh(Exptree* node);
 
@@ -453,6 +493,10 @@ namespace CAS {
         
         /** @name simplifyLog10
          *  @brief Simplify base-10 logarithm with special value recognition
+         *  @param node Base-10 logarithm node
+         *  @return Simplified expression
+         *  @details Recognizes log10(1)=0, log10(10)=1, log10(100)=2, log10(1000)=3, log10(1/10)=-1.
+         *           Otherwise converts to natural log: log10(x) = ln(x)/ln(10).
          */
         Exptree* simplifyLog10(Exptree* node);
         
@@ -467,28 +511,103 @@ namespace CAS {
         Exptree* simplifyFact(Exptree* node);
         
         /** @name simplifyDeg
-         *  @brief Convert degrees to radians: deg(x) = (pi/180)*x
+         *  @brief Convert degrees to radians
+         *  @param node Degrees node
+         *  @return Simplified expression
+         *  @details deg(x) = (pi/180)*x. Conversion is done in preTransform.
          */
         Exptree* simplifyDeg(Exptree* node);
         
         /** @name simplifyRad
-         *  @brief Convert radians to degrees: rad(x) = (180/pi)*x
+         *  @brief Convert radians to degrees
+         *  @param node Radians node
+         *  @return Simplified expression
+         *  @details rad(x) = (180/pi)*x. Conversion is done in preTransform.
          */
         Exptree* simplifyRad(Exptree* node);
 
         // ========== Addition internal methods ==========
+
+        /** @name collectAddTerms
+         *  @brief Recursively collect all terms of an addition into a flat buffer
+         *  @param node Current node being traversed
+         *  @param buf WorkBuffer to collect terms into
+         *  @details Flattens nested addition nodes, accumulates rational constants,
+         *           and collects non-constant terms via deep copy.
+         */
         void collectAddTerms(Exptree* node, WorkBuffer& buf);
+        /** @name mergeAddTerms
+         *  @brief Merge like terms in the collected addition buffer
+         *  @param buf WorkBuffer containing collected terms
+         *  @details Identifies terms with matching base structure (ignoring rational coefficients)
+         *           and combines their coefficients by addition. Terms with zero coefficient
+         *           after merging are removed (set to nullptr and compacted).
+         */
         void mergeAddTerms(WorkBuffer& buf);
+        /** @name rebuildAdd
+         *  @brief Rebuild a canonical addition expression from collected terms
+         *  @param buf WorkBuffer containing merged terms
+         *  @return Newly built addition node or simplified single term
+         *  @details Adds the accumulated constant, sorts terms, and creates the final
+         *           expression. Returns a single term if only one remains, or 0 if none.
+         */
         Exptree* rebuildAdd(WorkBuffer& buf);
 
         // ========== Multiplication internal methods ==========
+
+        /** @name collectMulFactors
+         *  @brief Recursively collect all factors of a product into a flat buffer
+         *  @param node Current node being traversed
+         *  @param buf WorkBuffer to collect factors into
+         *  @details Flattens nested multiplication nodes, accumulates rational constants,
+         *           and collects non-constant factors via deep copy.
+         */
         void collectMulFactors(Exptree* node, WorkBuffer& buf);
+        /** @name mergeMulFactors
+         *  @brief Merge like factors in the collected multiplication buffer
+         *  @param buf WorkBuffer containing collected factors
+         *  @details Combines factors with the same base by adding exponents:
+         *           x^a * x^b = x^(a+b). If the combined exponent is zero,
+         *           the factor is removed (replaced by 1 and compacted out).
+         */
         void mergeMulFactors(WorkBuffer& buf);
+        /** @name rebuildMul
+         *  @brief Rebuild a canonical multiplication expression from collected factors
+         *  @param buf WorkBuffer containing merged factors
+         *  @return Newly built multiplication node or simplified single factor
+         *  @details Multiplies in the accumulated constant, sorts factors, and creates the
+         *           final expression. Returns a single factor if only one remains,
+         *           0 if the constant is zero, or 1 if no factors remain.
+         */
         Exptree* rebuildMul(WorkBuffer& buf);
 
         // ========== Power internal methods ==========
+
+        /** @name foldRationalPower
+         *  @brief Attempt to compute an exact rational power of a rational base
+         *  @param base Base node, must be rational
+         *  @param exp Exponent node, must be rational
+         *  @return Pointer to result node, or nullptr if exact computation is not possible
+         *  @details Only handles non-negative integer exponents using Intg::pow.
+         *           Returns nullptr for negative or non-integer exponents.
+         */
         Exptree* foldRationalPower(Exptree* base, Exptree* exp);
+        /** @name isPerfectSquare
+         *  @brief Check if a rational number is a perfect square
+         *  @param r Rational number to check, must be non-negative
+         *  @param root Output parameter receiving the square root if perfect square
+         *  @return true if r is a perfect square, false otherwise
+         *  @details Uses Intg::sqrt on numerator and denominator separately,
+         *           then verifies by squaring the result.
+         */
         bool isPerfectSquare(const Rational& r, Rational& root);
+        /** @name simplifyEulerForm
+         *  @brief Apply Euler's formula to e^(i*theta)
+         *  @param expArg The exponent argument, should be a product containing i
+         *  @return cos(theta) + i*sin(theta) node, or nullptr if pattern not matched
+         *  @details Recognizes e^(i*theta) where theta is any expression.
+         *           Returns nullptr if the argument is not a simple i*theta pattern.
+         */
         Exptree* simplifyEulerForm(Exptree* expArg);
 
         // ========== Trigonometric helper ==========
@@ -502,9 +621,24 @@ namespace CAS {
         Exptree* simplifyTrigSpecialAngles(Exptree* node, const char* funcName);
 
         // ========== Complex number support ==========
+
+        /** @name handleComplexSqrt
+         *  @brief Convert sqrt(-a) to i*sqrt(a) for a > 0
+         *  @param node Power node with exponent 1/2
+         *  @return Simplified node, or nullptr if pattern doesn't match
+         *  @details Detects (-1)^(1/2) -> i, and for products (-1*a)^(1/2) -> i*sqrt(a).
+         */
         Exptree* handleComplexSqrt(Exptree* node);
 
         // ========== Sorting ==========
+
+        /** @name sortItems
+         *  @brief Sort an array of expression pointers using bubble sort
+         *  @param items Array of expression node pointers
+         *  @param count Number of items in the array
+         *  @details Uses bubble sort, efficient for small arrays typical in embedded CAS.
+         *           Ordering is determined by compareNodes: Rational < Variable < Function.
+         */
         void sortItems(Exptree** items, size_t count);
     };
 
