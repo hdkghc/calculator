@@ -24,62 +24,77 @@
 #include "cas/intg.hpp"
 
 namespace CAS {
-    /** @name SpecialVal
-     *  @brief Enumeration for special values in the expression tree
-     *  @details This enumeration is used to represent special mathematical constants and values in the expression
-     */
-    enum class SpecialVal : uint8_t {
-        spNull, spPI, spE, spImag
-    };
-
-    /** @name operator_t
-     *  @brief Enumeration for operators in the expression tree
-     *  @details This enumeration is used to represent mathematical operators in the expression tree
-     */
-    enum class operator_t : uint8_t {
-        opNull, opAdd, opSub, opMul, opDiv, opPow, opSqrt, opRoot, opLog, opLn, opSin, opCos, opTan, opCsc, opSec, opCot,
-        opAsin, opAcos, opAtan, opAcsc, opAsec, opAcot, opSinh, opCosh, opTanh, opCsch, opSech, opCoth,
-        opAsinh, opAcosh, opAtanh, opAcsch, opsech, opAcoth, opAbs, opFloor, opCeil, opRound,
-        opFactorial, opGamma, opRandomRat, opRandomInt, opIntegral, opDerivative, opLimit, opSum, opProduct
-    };
-
-    /** @name ExpTreeNode
-     *  @brief Structure for nodes in the expression tree
-     *  @details This structure represents a node in the expression tree, which can be either a leaf node (containing a rational or special value) or an internal node (containing an operator and two child nodes)
-     */
-    struct ExpTreeNode {
-        /** @name value value_t
-         *  @brief Union for the value of the node
-         *  @details This union is used to store either a rational number or a special value in the node
-         */
-        union value_t {
-            Rational rat;
-            SpecialVal spec;
-            value_t() : spec(SpecialVal::spNull) {}
-            ~value_t() {}
-        }value;
-        /** @name f
-         *  @brief Flag for the node
-         *  @details & 0x01 : 0 = rational, 1 = special value
-         *           & 0x02 : 0 = leaf node, 1 = internal node
-         */
-        uint8_t f;
-        ExpTreeNode* left;
-        ExpTreeNode* right;
-        operator_t op;
-        ExpTreeNode() 
-            : left(nullptr), right(nullptr), op(operator_t::opNull) { 
-                f = 0x01;
-        }
-        ExpTreeNode(Rational val) 
-            : left(nullptr), right(nullptr), op(operator_t::opNull) { 
-                value.rat = val;
-                f = 0x00;
-        }
-        ExpTreeNode(operator_t oper, ExpTreeNode *l, ExpTreeNode *r) 
-            : left(l), right(r), op(oper) {
-                f = 0x02;
-        }
+    class Exptree {
+        public:
+            /** @name value
+             *  @brief The value of the expression tree node
+             */
+            Rational value;
+            /** @name var
+             *  @brief The value of the expression tree node / function name
+             */
+            std::string var;
+            /** @name valtp
+             *  @brief The type of the value of the expression tree node
+             */
+            enum class val_t : uint8_t {
+                valNull,        // Empty node
+                valRational,    // Rational number
+                valVariable,    // Variable
+                valFunction     // Function (include operators)
+            } valtp;
+            /** @name child
+             *  @brief The child of the expression tree node
+             */
+            std::vector<Exptree*> child;
+            Exptree() : value(0), var(""), valtp(val_t::valNull) {}
+            Exptree operator+(Exptree *rhs) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "+";
+                ret.child.push_back(this);
+                ret.child.push_back(rhs);
+                return ret;
+            }
+            Exptree operator-(Exptree *rhs) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "-";
+                ret.child.push_back(this);
+                ret.child.push_back(rhs);
+                return ret;
+            }
+            Exptree operator*(Exptree *rhs) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "*";
+                ret.child.push_back(this);
+                ret.child.push_back(rhs);
+                return ret;
+            }
+            Exptree operator/(Exptree *rhs) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "/";
+                ret.child.push_back(this);
+                ret.child.push_back(rhs);
+                return ret;
+            }
+            Exptree operator^(Exptree *rhs) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "^";
+                ret.child.push_back(this);
+                ret.child.push_back(rhs);
+                return ret;
+            }
+            Exptree operator-() {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = "-";
+                ret.child.push_back(this);
+                return ret;
+            }
     };
 } // namespace CAS
 
