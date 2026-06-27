@@ -692,16 +692,14 @@ namespace CAS {
              *  @param rhs The exponent integer
              *  @return The result of the square root
              */
-            Intg sqrt(Intg x) {
-                Intg x1 = x - 1;
-                Intg s = 1;
+            Intg sqrt(Intg rhs) {
                 Intg g0, g1;
 
-                g0 = Intg(2).pow(s);
-                g1 = (g0 + (x / g0)) / 2;
+                g0 = Intg(2);
+                g1 = (g0 + (rhs / g0)) / 2;
                 while(g1 < g0) {
                     g0 = g1;
-                    g1 = (g0 + x / g0) / 2;
+                    g1 = (g0 + rhs / g0) / 2;
                 }
                 return g0;
             }
