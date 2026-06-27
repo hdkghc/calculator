@@ -95,6 +95,13 @@ namespace CAS {
                 ret.child.push_back(this);
                 return ret;
             }
+            Exptree SetFunction(std::string func_name, std::vector<Exptree*> args) {
+                Exptree ret;
+                ret.valtp = val_t::valFunction;
+                ret.var = func_name;
+                ret.child = args;
+                return ret;
+            }
     };
 } // namespace CAS
 
