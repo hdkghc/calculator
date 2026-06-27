@@ -92,7 +92,7 @@ namespace CAS {
         const char *const dot       = "\001v.";
         const char *const angle     = "\001va";
         const char *const det       = "\001dt";
-        const char *const matrix    = "\001mx";
+        const char *const matrix    = "\001mt";
         const char *const transpose = "\001tr";
         const char *const eigenval  = "\001Ex";
         const char *const eigenvec  = "\001Ev";
@@ -114,7 +114,82 @@ namespace CAS {
         const char *const bxnor     = "\001!^";
         const char *const bnand     = "\001!&";
         const char *const bnor      = "\001!|";
+
+        // Plotting functions
+        const char *const plot2d    = "\001p2";
+        const char *const plot3d    = "\001p3";
     } // namespace FuncName
+    namespace ConstName {
+        const char *const pi        = "\002$p";
+        const char *const e         = "\002$e";
+        const char *const phi       = "\002$f"; // golden ratio
+        const char *const i         = "\002$i"; // imaginary unit
+
+        // scientific constants
+        // Commonly used physical constants
+        const char *const h         = "\002_h";  // Planck constant
+        const char *const hbar      = "\002hb"; // Reduced Planck constant
+        const char *const c         = "\002cc"; // speed of light in vacuum
+        const char *const eps0      = "\002ep"; // vacuum permittivity
+        const char *const mu0       = "\002m0"; // vacuum permeability
+        const char *const Z0        = "\002Z0"; // vacuum impedance
+        const char *const G         = "\002GG"; // gravitational constant
+        const char *const lP        = "\002lP"; // Planck length
+        const char *const tP        = "\002tP"; // Planck time
+        const char *const mP        = "\002mP"; // Planck mass
+
+        // Electromagnetic constants
+        const char *const muN       = "\002uN"; // Nuclear magneton
+        const char *const muB       = "\002uB"; // Bohr magneton
+        const char *const e0        = "\002e0"; // Elementary charge
+        const char *const Phi0      = "\002Ph"; // Magnetic flux quantum
+        const char *const G0        = "\002G0"; // Conductance quantum
+        const char *const Rk        = "\002Rk"; // von Klitzing constant
+        const char *const Kj        = "\002Kj"; // Josephson constant
+        
+        // Atomic & nuclear constants
+        const char *const mp        = "\002mp"; // mass of proton
+        const char *const mn        = "\002mn"; // mass of neutron
+        const char *const me        = "\002me"; // mass of electron
+        const char *const mu        = "\002mu"; // mass of muon
+        const char *const a0        = "\002a0"; // Bohr radius
+        const char *const alpha     = "\002al"; // Fine-structure constant
+        const char *const re        = "\002re"; // Classical electron radius
+        const char *const gammaN    = "\002gN"; // Nuclear gyromagnetic ratio
+        const char *const gammaP    = "\002gP"; // Proton gyromagnetic ratio
+        const char *const gammaNeu  = "\002gn"; // Neutron gyromagnetic ratio
+        const char *const gammaE    = "\002gE"; // Electron gyromagnetic ratio
+        const char *const gammaMu   = "\002gM"; // Muon gyromagnetic ratio
+        const char *const lambdaCp  = "\002lp"; // Proton Compton wavelength
+        const char *const lambdaCn  = "\002lN"; // Neutron Compton wavelength
+        const char *const lambdaCe  = "\002lE"; // Electron Compton wavelength
+        const char *const lambdaCMu = "\002lM"; // Muon Compton wavelength
+        const char *const Rinf      = "\002Ri"; // Rydberg constant
+        const char *const muP       = "\002uP"; // Proton magnetic moment
+        const char *const muNeu     = "\002un"; // Neutron magnetic moment
+        const char *const muE       = "\002uE"; // Electron magnetic moment
+        const char *const muMu      = "\002uM"; // Muon magnetic moment
+        const char *const tauN      = "\002tN"; // Neutron mean lifetime
+        const char *const mtau      = "\002tM"; // mass of tau lepton
+
+        // Physical & chemical constants
+        const char *const u         = "\002uu"; // atomic mass constant
+        const char *const NA        = "\002NA"; // Avogadro constant
+        const char *const kB        = "\002kB"; // Boltzmann constant
+        const char *const R         = "\002RR"; // molar gas constant
+        const char *const F         = "\002FF"; // Faraday constant
+        const char *const sigma     = "\002ss"; // Stefan-Boltzmann constant
+        const char *const Vm        = "\002Vm"; // molar volume of ideal gas
+        const char *const c1        = "\002c1"; // first radiation constant
+        const char *const c2        = "\002c2"; // second radiation constant
+
+        // Other physical constants
+        const char *const g         = "\002gg"; // standard acceleration of gravity
+        const char *const atm       = "\002at"; // standard atmosphere
+        const char *const Rk90      = "\002R9"; // von Klitzing constant (1990)
+        const char *const Kj90      = "\002K9"; // Josephson constant
+        const char *const t         = "\002tt"; // standard temperature
+    } // namespace ConstName
 } // namespace CAS
 
 #endif // _CAS_EXPDEF_HPP_
