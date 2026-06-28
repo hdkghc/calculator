@@ -513,6 +513,84 @@ namespace CAS {
             return simplifyMul(result);
         }
 
+        // sqrt(a*i) = (1+i)*sqrt(a/2) for a > 0
+        if (SimpUtil::isFunction(base, "*")) {
+            Rational coeff(Intg(1));
+            bool hasI = false;
+            bool hasOther = false;
+            for (size_t i = 0; i < base->child.size(); ++i) {
+                if (SimpUtil::isConstantI(base->child[i])) {
+                    hasI = true;
+                } else if (SimpUtil::isRational(base->child[i])) {
+                    coeff = coeff * base->child[i]->value;
+                } else {
+                    hasOther = true;
+                    break;
+                }
+            }
+            if (hasI && !hasOther && coeff > Rational(Intg(0))) {
+                // sqrt(a*i) = (1+i)*sqrt(a/2)
+                Rational halfA = coeff * Rational(Intg(1), Intg(2));
+
+                Exptree* sqrtHalfA = SimpUtil::makeFunction(FuncName::sqrt);
+                sqrtHalfA->child.push_back(SimpUtil::makeRational(halfA));
+                sqrtHalfA = simplifySqrt(sqrtHalfA);
+
+                Exptree* onePlusI = SimpUtil::makeFunction("+");
+                onePlusI->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                onePlusI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(onePlusI);
+                result->child.push_back(sqrtHalfA);
+
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
+            }
+        }
+
+        // sqrt(-a*i) = (1-i)*sqrt(a/2) for a > 0
+        if (SimpUtil::isFunction(base, "*")) {
+            bool hasMinusOne = false;
+            bool hasI = false;
+            Rational coeff(Intg(1));
+            bool hasOther = false;
+            for (size_t i = 0; i < base->child.size(); ++i) {
+                if (SimpUtil::isMinusOne(base->child[i])) {
+                    hasMinusOne = true;
+                } else if (SimpUtil::isConstantI(base->child[i])) {
+                    hasI = true;
+                } else if (SimpUtil::isRational(base->child[i])) {
+                    coeff = coeff * base->child[i]->value;
+                } else {
+                    hasOther = true;
+                    break;
+                }
+            }
+            if (hasMinusOne && hasI && !hasOther && coeff > Rational(Intg(0))) {
+                // sqrt(-a*i) = (1-i)*sqrt(a/2)
+                Rational halfA = coeff * Rational(Intg(1), Intg(2));
+
+                Exptree* sqrtHalfA = SimpUtil::makeFunction(FuncName::sqrt);
+                sqrtHalfA->child.push_back(SimpUtil::makeRational(halfA));
+                sqrtHalfA = simplifySqrt(sqrtHalfA);
+
+                Exptree* oneMinusI = SimpUtil::makeFunction("+");
+                oneMinusI->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                Exptree* negI = SimpUtil::makeFunction("*");
+                negI->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                negI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                oneMinusI->child.push_back(negI);
+
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(oneMinusI);
+                result->child.push_back(sqrtHalfA);
+
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
+            }
+        }
+
         return nullptr;
     }
 

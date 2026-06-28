@@ -35,19 +35,19 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg("-inf")));
         }
 
-        // ln(1) = 0 (exact)
+        // ln(1) = 0
         if (SimpUtil::isOne(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
-        // ln(e) = 1 (exact)
+        // ln(e) = 1
         if (SimpUtil::isConstantE(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
-        // ln(-1) = i*pi (Euler's identity)
+        // ln(-1) = i*pi
         if (SimpUtil::isMinusOne(arg)) {
             SimpUtil::freeTree(node);
             Exptree* iPi = SimpUtil::makeFunction("*");
@@ -87,8 +87,7 @@ namespace CAS {
             }
         }
 
-        // ln(-a) = ln(a) + i*pi for a > 0
-        // Pattern: ln((-1)*a) where a is positive
+        // ln(-a) = ln(a) + i*pi (for a > 0, handled by preTransform)
         if (SimpUtil::isFunction(arg, "*")) {
             bool hasMinusOne = false;
             Exptree* posPart = nullptr;
@@ -100,7 +99,6 @@ namespace CAS {
             }
 
             if (hasMinusOne) {
-                // Build positive part by removing -1
                 Exptree* newPos = SimpUtil::makeFunction("*");
                 for (size_t i = 0; i < arg->child.size(); ++i) {
                     if (!SimpUtil::isMinusOne(arg->child[i])) {
@@ -108,7 +106,6 @@ namespace CAS {
                     }
                 }
                 if (newPos->child.size() == 0) {
-                    // Only -1, already handled above
                     SimpUtil::freeTree(newPos);
                     return node;
                 }
@@ -145,20 +142,30 @@ namespace CAS {
             }
         }
 
-        // ln(x^a) = a*ln(x) for x > 0
+        // ln(x^a) = a*ln(x) — generalized: remove isPositive restriction
         if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
-            if (SimpUtil::isPositive(arg->child[0])) {
-                Exptree* a = SimpUtil::deepCopy(arg->child[1]);
-                Exptree* lnBase = SimpUtil::makeFunction(FuncName::ln);
-                lnBase->child.push_back(SimpUtil::deepCopy(arg->child[0]));
+            Exptree* a = SimpUtil::deepCopy(arg->child[1]);
+            Exptree* lnBase = SimpUtil::makeFunction(FuncName::ln);
+            lnBase->child.push_back(SimpUtil::deepCopy(arg->child[0]));
 
-                Exptree* result = SimpUtil::makeFunction("*");
-                result->child.push_back(a);
-                result->child.push_back(lnBase);
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(a);
+            result->child.push_back(lnBase);
 
-                SimpUtil::freeTree(node);
-                return simplifyMul(result);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
+        // ln(a*b) = ln(a) + ln(b)
+        if (SimpUtil::isFunction(arg, "*")) {
+            Exptree* sum = SimpUtil::makeFunction("+");
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                Exptree* lnTerm = SimpUtil::makeFunction(FuncName::ln);
+                lnTerm->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                sum->child.push_back(lnTerm);
             }
+            SimpUtil::freeTree(node);
+            return simplifyAdd(sum);
         }
 
         return node;
