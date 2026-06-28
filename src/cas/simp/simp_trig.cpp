@@ -70,7 +70,7 @@ namespace CAS {
                 bool isCos = (std::strcmp(funcName, "cos") == 0);
                 bool isTan = (std::strcmp(funcName, "tan") == 0);
 
-                // sin(pi/2) = 1, cos(pi/2) = 0, tan(pi/2) = undefined
+                // sin(pi/2) = 1, cos(pi/2) = 0
                 if (coeff == Rational(Intg(1), Intg(2))) {
                     if (isSin) return SimpUtil::makeRational(Rational(Intg(1)));
                     if (isCos) return SimpUtil::makeRational(Rational(Intg(0)));
@@ -124,7 +124,6 @@ namespace CAS {
                         return result;
                     }
                 }
-                // sin(pi/5) = sqrt(10-2*sqrt(5))/4  (sin 36°)
                 // cos(pi/5) = (sqrt(5)+1)/4 = phi/2  (cos 36°)
                 if (coeff == Rational(Intg(1), Intg(5))) {
                     if (isCos) {
@@ -141,7 +140,6 @@ namespace CAS {
                     }
                 }
                 // sin(pi/10) = (sqrt(5)-1)/4  (sin 18°)
-                // cos(pi/10) = sqrt(10+2*sqrt(5))/4  (cos 18°)
                 if (coeff == Rational(Intg(1), Intg(10))) {
                     if (isSin) {
                         Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
@@ -164,6 +162,47 @@ namespace CAS {
         return nullptr;
     }
 
+    // ========== Helper: detect i*x pattern ==========
+
+    /**
+     *  @brief Check if expression is i * something, extract the something
+     *  @param node Node to check
+     *  @param inner Output: the non-i part if pattern matches
+     *  @return true if node is i * inner
+     */
+    static bool extractImaginaryArg(Exptree* node, Exptree*& inner) {
+        if (SimpUtil::isConstantI(node)) {
+            inner = SimpUtil::makeRational(Rational(Intg(1)));
+            return true;
+        }
+        if (SimpUtil::isFunction(node, "*")) {
+            bool hasI = false;
+            Exptree* nonI = SimpUtil::makeFunction("*");
+            for (size_t i = 0; i < node->child.size(); ++i) {
+                if (SimpUtil::isConstantI(node->child[i])) {
+                    hasI = true;
+                } else {
+                    nonI->child.push_back(SimpUtil::deepCopy(node->child[i]));
+                }
+            }
+            if (hasI) {
+                if (nonI->child.size() == 1) {
+                    inner = nonI->child[0];
+                    nonI->child.clear();
+                    SimpUtil::freeTree(nonI);
+                } else if (nonI->child.size() == 0) {
+                    SimpUtil::freeTree(nonI);
+                    inner = SimpUtil::makeRational(Rational(Intg(1)));
+                } else {
+                    inner = nonI;
+                }
+                return true;
+            }
+            SimpUtil::freeTree(nonI);
+        }
+        return false;
+    }
+
     // ========== Sin ==========
 
     Exptree* TreeSimplifier::simplifySin(Exptree* node) {
@@ -182,20 +221,32 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
+        // sin(i*x) = i*sinh(x)
+        Exptree* inner = nullptr;
+        if (extractImaginaryArg(arg, inner)) {
+            Exptree* sinhNode = SimpUtil::makeFunction(FuncName::sinh);
+            sinhNode->child.push_back(inner);
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            result->child.push_back(sinhNode);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         // sin(-x) = -sin(x)
         if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
             if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
+                Exptree* inner2 = nullptr;
                 if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
+                    inner2 = SimpUtil::deepCopy(arg->child[1]);
                 } else {
-                    inner = SimpUtil::makeFunction("*");
+                    inner2 = SimpUtil::makeFunction("*");
                     for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                        inner2->child.push_back(SimpUtil::deepCopy(arg->child[i]));
                     }
                 }
                 Exptree* innerSin = SimpUtil::makeFunction(FuncName::sin);
-                innerSin->child.push_back(inner);
+                innerSin->child.push_back(inner2);
                 innerSin = simplifySin(innerSin);
                 Exptree* result = SimpUtil::makeFunction("*");
                 result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
@@ -225,20 +276,29 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
+        // cos(i*x) = cosh(x)
+        Exptree* inner = nullptr;
+        if (extractImaginaryArg(arg, inner)) {
+            Exptree* coshNode = SimpUtil::makeFunction(FuncName::cosh);
+            coshNode->child.push_back(inner);
+            SimpUtil::freeTree(node);
+            return coshNode;
+        }
+
         // cos(-x) = cos(x)
         if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
             if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
+                Exptree* inner2 = nullptr;
                 if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
+                    inner2 = SimpUtil::deepCopy(arg->child[1]);
                 } else {
-                    inner = SimpUtil::makeFunction("*");
+                    inner2 = SimpUtil::makeFunction("*");
                     for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                        inner2->child.push_back(SimpUtil::deepCopy(arg->child[i]));
                     }
                 }
                 Exptree* newCos = SimpUtil::makeFunction(FuncName::cos);
-                newCos->child.push_back(inner);
+                newCos->child.push_back(inner2);
                 SimpUtil::freeTree(node);
                 return simplifyCos(newCos);
             }
@@ -264,20 +324,32 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
+        // tan(i*x) = i*tanh(x)
+        Exptree* inner = nullptr;
+        if (extractImaginaryArg(arg, inner)) {
+            Exptree* tanhNode = SimpUtil::makeFunction(FuncName::tanh);
+            tanhNode->child.push_back(inner);
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            result->child.push_back(tanhNode);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         // tan(-x) = -tan(x)
         if (SimpUtil::isFunction(arg, "*") && !arg->child.empty()) {
             if (SimpUtil::isMinusOne(arg->child[0])) {
-                Exptree* inner = nullptr;
+                Exptree* inner2 = nullptr;
                 if (arg->child.size() == 2) {
-                    inner = SimpUtil::deepCopy(arg->child[1]);
+                    inner2 = SimpUtil::deepCopy(arg->child[1]);
                 } else {
-                    inner = SimpUtil::makeFunction("*");
+                    inner2 = SimpUtil::makeFunction("*");
                     for (size_t i = 1; i < arg->child.size(); ++i) {
-                        inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                        inner2->child.push_back(SimpUtil::deepCopy(arg->child[i]));
                     }
                 }
                 Exptree* innerTan = SimpUtil::makeFunction(FuncName::tan);
-                innerTan->child.push_back(inner);
+                innerTan->child.push_back(inner2);
                 innerTan = simplifyTan(innerTan);
                 Exptree* result = SimpUtil::makeFunction("*");
                 result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));

@@ -41,6 +41,27 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
+        // sqrt(-1) = i
+        if (SimpUtil::isMinusOne(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeVariable(ConstName::i);
+        }
+
+        // sqrt of negative rational: sqrt(-a) = i*sqrt(a) for a > 0
+        if (SimpUtil::isNegative(arg)) {
+            Rational posVal = Rational(Intg(0)) - arg->value;
+            Exptree* sqrtPos = SimpUtil::makeFunction(FuncName::sqrt);
+            sqrtPos->child.push_back(SimpUtil::makeRational(posVal));
+            sqrtPos = simplifySqrt(sqrtPos);
+
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            result->child.push_back(sqrtPos);
+
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         // sqrt of perfect square rational
         if (SimpUtil::isRational(arg)) {
             Rational root;
@@ -101,8 +122,34 @@ namespace CAS {
             }
         }
 
-        // sqrt(-1) = i, sqrt(-a) = i*sqrt(a)
-        // Build as power and let simplifyPow handle it
+        // sqrt(-a) for symbolic negative products: sqrt((-1)*a) -> i*sqrt(a)
+        // This pattern occurs when -a is already transformed to (* -1 a)
+        if (SimpUtil::isFunction(arg, "*")) {
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                if (SimpUtil::isMinusOne(arg->child[i])) {
+                    Exptree* remaining = SimpUtil::makeFunction("*");
+                    for (size_t j = 0; j < arg->child.size(); ++j) {
+                        if (j != i) {
+                            remaining->child.push_back(SimpUtil::deepCopy(arg->child[j]));
+                        }
+                    }
+                    remaining = simplifyMul(remaining);
+
+                    Exptree* sqrtRem = SimpUtil::makeFunction(FuncName::sqrt);
+                    sqrtRem->child.push_back(remaining);
+                    sqrtRem = simplifySqrt(sqrtRem);
+
+                    Exptree* result = SimpUtil::makeFunction("*");
+                    result->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                    result->child.push_back(sqrtRem);
+
+                    SimpUtil::freeTree(node);
+                    return simplifyMul(result);
+                }
+            }
+        }
+
+        // Default: convert to power form and let simplifyPow handle it
         Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
         node->var = "^";
         node->child.clear();
@@ -143,6 +190,94 @@ namespace CAS {
             return SimpUtil::makeRational(posVal);
         }
 
+        // abs(i) = 1
+        if (SimpUtil::isConstantI(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // abs(a + b*i) = sqrt(a^2 + b^2)
+        // Check if arg is a sum containing i terms
+        if (SimpUtil::isFunction(arg, "+")) {
+            bool hasComplex = false;
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                // Check if term contains i
+                Exptree* term = arg->child[i];
+                if (SimpUtil::isConstantI(term)) {
+                    hasComplex = true;
+                    break;
+                }
+                if (SimpUtil::isFunction(term, "*")) {
+                    for (size_t j = 0; j < term->child.size(); ++j) {
+                        if (SimpUtil::isConstantI(term->child[j])) {
+                            hasComplex = true;
+                            break;
+                        }
+                    }
+                    if (hasComplex) break;
+                }
+            }
+            if (hasComplex) {
+                // Build: sqrt(realPart^2 + imagPart^2)
+                Exptree* realSum = SimpUtil::makeRational(Rational(Intg(0)));
+                Exptree* imagSum = SimpUtil::makeRational(Rational(Intg(0)));
+
+                for (size_t i = 0; i < arg->child.size(); ++i) {
+                    Exptree* term = arg->child[i];
+                    bool termHasI = false;
+                    Exptree* coeff = nullptr;
+
+                    if (SimpUtil::isConstantI(term)) {
+                        termHasI = true;
+                        coeff = SimpUtil::makeRational(Rational(Intg(1)));
+                    } else if (SimpUtil::isFunction(term, "*")) {
+                        Exptree* nonI = SimpUtil::makeFunction("*");
+                        for (size_t j = 0; j < term->child.size(); ++j) {
+                            if (SimpUtil::isConstantI(term->child[j])) {
+                                termHasI = true;
+                            } else {
+                                nonI->child.push_back(SimpUtil::deepCopy(term->child[j]));
+                            }
+                        }
+                        if (termHasI) {
+                            coeff = simplifyMul(nonI);
+                        } else {
+                            SimpUtil::freeTree(nonI);
+                        }
+                    }
+
+                    if (termHasI && coeff) {
+                        Exptree* sq = SimpUtil::makeFunction("^");
+                        sq->child.push_back(coeff);
+                        sq->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        Exptree* newImag = SimpUtil::makeFunction("+");
+                        newImag->child.push_back(imagSum);
+                        newImag->child.push_back(sq);
+                        imagSum = newImag;
+                    } else {
+                        Exptree* sq = SimpUtil::makeFunction("^");
+                        sq->child.push_back(SimpUtil::deepCopy(term));
+                        sq->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        Exptree* newReal = SimpUtil::makeFunction("+");
+                        newReal->child.push_back(realSum);
+                        newReal->child.push_back(sq);
+                        realSum = newReal;
+                    }
+                }
+
+                Exptree* sumSq = SimpUtil::makeFunction("+");
+                sumSq->child.push_back(realSum);
+                sumSq->child.push_back(imagSum);
+                sumSq = simplifyAdd(sumSq);
+
+                Exptree* result = SimpUtil::makeFunction(FuncName::sqrt);
+                result->child.push_back(sumSq);
+
+                SimpUtil::freeTree(node);
+                return simplifySqrt(result);
+            }
+        }
+
         // abs(-x) = abs(x) where -x is represented as (-1)*x
         if (SimpUtil::isFunction(arg, "*")) {
             if (!arg->child.empty() && SimpUtil::isMinusOne(arg->child[0])) {
@@ -172,6 +307,8 @@ namespace CAS {
                         val = Rational(Intg(0)) - val;
                     }
                     result->child.push_back(SimpUtil::makeRational(val));
+                } else if (SimpUtil::isConstantI(arg->child[i])) {
+                    // abs(i) = 1, skip
                 } else {
                     Exptree* absChild = SimpUtil::makeFunction(FuncName::abs);
                     absChild->child.push_back(SimpUtil::deepCopy(arg->child[i]));

@@ -40,10 +40,99 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
-        // ln(e) = 1 (exact, uses ConstName::e)
+        // ln(e) = 1 (exact)
         if (SimpUtil::isConstantE(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // ln(-1) = i*pi (Euler's identity)
+        if (SimpUtil::isMinusOne(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* iPi = SimpUtil::makeFunction("*");
+            iPi->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            iPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return iPi;
+        }
+
+        // ln(i) = i*pi/2
+        if (SimpUtil::isConstantI(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+            Exptree* iPi = SimpUtil::makeFunction("*");
+            iPi->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            iPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(half);
+            result->child.push_back(iPi);
+            return result;
+        }
+
+        // ln(-i) = -i*pi/2
+        if (SimpUtil::isFunction(arg, "*") && arg->child.size() == 2) {
+            if (SimpUtil::isMinusOne(arg->child[0]) && SimpUtil::isConstantI(arg->child[1])) {
+                SimpUtil::freeTree(node);
+                Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                Exptree* negI = SimpUtil::makeFunction("*");
+                negI->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                negI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                Exptree* negIPi = SimpUtil::makeFunction("*");
+                negIPi->child.push_back(negI);
+                negIPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(half);
+                result->child.push_back(negIPi);
+                return result;
+            }
+        }
+
+        // ln(-a) = ln(a) + i*pi for a > 0
+        // Pattern: ln((-1)*a) where a is positive
+        if (SimpUtil::isFunction(arg, "*")) {
+            bool hasMinusOne = false;
+            Exptree* posPart = nullptr;
+
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                if (SimpUtil::isMinusOne(arg->child[i])) {
+                    hasMinusOne = true;
+                }
+            }
+
+            if (hasMinusOne) {
+                // Build positive part by removing -1
+                Exptree* newPos = SimpUtil::makeFunction("*");
+                for (size_t i = 0; i < arg->child.size(); ++i) {
+                    if (!SimpUtil::isMinusOne(arg->child[i])) {
+                        newPos->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                    }
+                }
+                if (newPos->child.size() == 0) {
+                    // Only -1, already handled above
+                    SimpUtil::freeTree(newPos);
+                    return node;
+                }
+                if (newPos->child.size() == 1) {
+                    posPart = newPos->child[0];
+                    newPos->child.clear();
+                    SimpUtil::freeTree(newPos);
+                } else {
+                    posPart = simplifyMul(newPos);
+                }
+
+                Exptree* lnPos = SimpUtil::makeFunction(FuncName::ln);
+                lnPos->child.push_back(posPart);
+
+                Exptree* iPi = SimpUtil::makeFunction("*");
+                iPi->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                iPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+
+                Exptree* result = SimpUtil::makeFunction("+");
+                result->child.push_back(lnPos);
+                result->child.push_back(iPi);
+
+                SimpUtil::freeTree(node);
+                return simplifyAdd(result);
+            }
         }
 
         // ln(e^x) = x

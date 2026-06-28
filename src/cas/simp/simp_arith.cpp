@@ -244,6 +244,9 @@ namespace CAS {
                         Exptree* newPow = SimpUtil::makeFunction("^");
                         newPow->child.push_back(SimpUtil::deepCopy(base_i));
                         newPow->child.push_back(sumExp);
+                        // Immediately simplify the power node
+                        // This handles i^2 -> -1, i^3 -> -i, etc.
+                        newPow = simplifyPow(newPow);
                         SimpUtil::freeTree(buf.items[i]);
                         SimpUtil::freeTree(buf.items[j]);
                         buf.items[i] = newPow;
@@ -438,6 +441,21 @@ namespace CAS {
             }
         }
 
+        // sqrt(-a) for negative rational a
+        if (SimpUtil::isNegative(base)) {
+            Rational posVal = Rational(Intg(0)) - base->value;
+            Exptree* sqrtPos = SimpUtil::makeFunction("^");
+            sqrtPos->child.push_back(SimpUtil::makeRational(posVal));
+            sqrtPos->child.push_back(SimpUtil::makeRational(Rational(Intg(1), Intg(2))));
+
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            result->child.push_back(sqrtPos);
+
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         return nullptr;
     }
 
@@ -520,6 +538,42 @@ namespace CAS {
                 negI->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
                 negI->child.push_back(SimpUtil::makeVariable(ConstName::i));
                 return negI;
+            }
+        }
+
+        // Complex power: (a*i)^integer -> a^n * i^n
+        if (SimpUtil::isFunction(base, "*") && SimpUtil::isInteger(exp)) {
+            bool hasI = false;
+            for (size_t i = 0; i < base->child.size(); ++i) {
+                if (SimpUtil::isConstantI(base->child[i])) {
+                    hasI = true;
+                    break;
+                }
+            }
+            if (hasI) {
+                Exptree* realPart = SimpUtil::makeFunction("*");
+                Exptree* iPart = nullptr;
+                for (size_t i = 0; i < base->child.size(); ++i) {
+                    if (SimpUtil::isConstantI(base->child[i])) {
+                        iPart = SimpUtil::makeFunction("^");
+                        iPart->child.push_back(SimpUtil::deepCopy(base->child[i]));
+                        iPart->child.push_back(SimpUtil::deepCopy(exp));
+                    } else {
+                        Exptree* powChild = SimpUtil::makeFunction("^");
+                        powChild->child.push_back(SimpUtil::deepCopy(base->child[i]));
+                        powChild->child.push_back(SimpUtil::deepCopy(exp));
+                        realPart->child.push_back(powChild);
+                    }
+                }
+                realPart = simplifyMul(realPart);
+                if (iPart) iPart = simplifyPow(iPart);
+
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(realPart);
+                if (iPart) result->child.push_back(iPart);
+
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
             }
         }
 
