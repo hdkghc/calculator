@@ -468,110 +468,7 @@ namespace CAS {
             return node;
         }
 
-        // Scalar * vector
-        if (!vectors.empty() && matrices.empty()) {
-            Exptree* vec = vectors[0];
-            size_t sz = SimpUtil::vectorElemCount(vec);
-
-            Exptree* result = SimpUtil::makeFunction(FuncName::vector);
-            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)sz))));
-
-            for (size_t j = 0; j < sz; ++j) {
-                if (scalarProd) {
-                    Exptree* prod = SimpUtil::makeFunction("*");
-                    prod->child.push_back(SimpUtil::deepCopy(scalarProd));
-                    prod->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(vec, j)));
-                    prod = simplifyMul(prod);
-                    result->child.push_back(prod);
-                } else {
-                    result->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(vec, j)));
-                }
-            }
-
-            if (scalarProd) SimpUtil::freeTree(scalarProd);
-            SimpUtil::freeTree(node);
-            return result;
-        }
-
-        // Scalar * matrix
-        if (vectors.empty() && matrices.size() == 1) {
-            Exptree* mat = matrices[0];
-            size_t m = 0, n = 0;
-            SimpUtil::matrixDims(mat, m, n);
-
-            Exptree* result = SimpUtil::makeFunction(FuncName::matrix);
-            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)m))));
-            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)n))));
-
-            for (size_t r = 0; r < m; ++r) {
-                for (size_t c = 0; c < n; ++c) {
-                    if (scalarProd) {
-                        Exptree* prod = SimpUtil::makeFunction("*");
-                        prod->child.push_back(SimpUtil::deepCopy(scalarProd));
-                        prod->child.push_back(
-                            SimpUtil::deepCopy(SimpUtil::matrixElem(mat, r, c, n)));
-                        prod = simplifyMul(prod);
-                        result->child.push_back(prod);
-                    } else {
-                        result->child.push_back(
-                            SimpUtil::deepCopy(SimpUtil::matrixElem(mat, r, c, n)));
-                    }
-                }
-            }
-
-            if (scalarProd) SimpUtil::freeTree(scalarProd);
-            SimpUtil::freeTree(node);
-            return result;
-        }
-
-        // Matrix * Matrix
-        if (vectors.empty() && matrices.size() == 2) {
-            Exptree* A = matrices[0];
-            Exptree* B = matrices[1];
-            size_t mA = 0, nA = 0, mB = 0, nB = 0;
-            if (!SimpUtil::matrixDims(A, mA, nA) || !SimpUtil::matrixDims(B, mB, nB)) {
-                if (scalarProd) SimpUtil::freeTree(scalarProd);
-                return node;
-            }
-            if (nA != mB) {
-                if (scalarProd) SimpUtil::freeTree(scalarProd);
-                return node;
-            }
-
-            Exptree* result = SimpUtil::makeFunction(FuncName::matrix);
-            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)mA))));
-            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)nB))));
-
-            for (size_t r = 0; r < mA; ++r) {
-                for (size_t c = 0; c < nB; ++c) {
-                    Exptree* sum = SimpUtil::makeFunction("+");
-                    for (size_t k = 0; k < nA; ++k) {
-                        Exptree* prod = SimpUtil::makeFunction("*");
-                        prod->child.push_back(
-                            SimpUtil::deepCopy(SimpUtil::matrixElem(A, r, k, nA)));
-                        prod->child.push_back(
-                            SimpUtil::deepCopy(SimpUtil::matrixElem(B, k, c, nB)));
-                        prod = simplifyMul(prod);
-                        sum->child.push_back(prod);
-                    }
-                    sum = simplifyAdd(sum);
-
-                    if (scalarProd) {
-                        Exptree* scaled = SimpUtil::makeFunction("*");
-                        scaled->child.push_back(SimpUtil::deepCopy(scalarProd));
-                        scaled->child.push_back(sum);
-                        sum = simplifyMul(scaled);
-                    }
-                    result->child.push_back(sum);
-                }
-            }
-
-            if (scalarProd) SimpUtil::freeTree(scalarProd);
-            SimpUtil::freeTree(node);
-            return result;
-        }
-
-        // Vector * Vector: 2D/3D cross product, otherwise dot product
+        // Case 1: Vector * Vector (2D cross=scalar, 3D cross=vector, other=dot)
         if (vectors.size() == 2 && matrices.empty()) {
             Exptree* a = vectors[0];
             Exptree* b = vectors[1];
@@ -580,7 +477,6 @@ namespace CAS {
 
             if (szA == szB) {
                 if (szA == 2) {
-                    // 2D cross product = a1*b2 - a2*b1
                     Exptree* prod1 = SimpUtil::makeFunction("*");
                     prod1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(a, 0)));
                     prod1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(b, 1)));
@@ -597,24 +493,31 @@ namespace CAS {
                     diff->child.push_back(negProd2);
                     diff = simplifyAdd(diff);
 
+                    // Return 3D vector (0, 0, diff)
+                    Exptree* result = SimpUtil::makeFunction(FuncName::vector);
+                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                    result->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                    result->child.push_back(diff);
+
                     if (scalarProd) {
-                        Exptree* scaled = SimpUtil::makeFunction("*");
-                        scaled->child.push_back(SimpUtil::deepCopy(scalarProd));
-                        scaled->child.push_back(diff);
-                        diff = simplifyMul(scaled);
+                        for (size_t i = 1; i < result->child.size(); ++i) {
+                            Exptree* scaled = SimpUtil::makeFunction("*");
+                            scaled->child.push_back(SimpUtil::deepCopy(scalarProd));
+                            scaled->child.push_back(result->child[i]);
+                            result->child[i] = simplifyMul(scaled);
+                        }
                     }
 
                     if (scalarProd) SimpUtil::freeTree(scalarProd);
                     SimpUtil::freeTree(node);
-                    return diff;
+                    return result;
                 }
 
                 if (szA == 3) {
-                    // 3D cross product
                     Exptree* result = SimpUtil::makeFunction(FuncName::vector);
                     result->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
 
-                    // x = a2*b3 - a3*b2
                     Exptree* x1 = SimpUtil::makeFunction("*");
                     x1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(a, 1)));
                     x1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(b, 2)));
@@ -629,7 +532,6 @@ namespace CAS {
                     x->child.push_back(negX2);
                     result->child.push_back(simplifyAdd(x));
 
-                    // y = a3*b1 - a1*b3
                     Exptree* y1 = SimpUtil::makeFunction("*");
                     y1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(a, 2)));
                     y1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(b, 0)));
@@ -644,7 +546,6 @@ namespace CAS {
                     y->child.push_back(negY2);
                     result->child.push_back(simplifyAdd(y));
 
-                    // z = a1*b2 - a2*b1
                     Exptree* z1 = SimpUtil::makeFunction("*");
                     z1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(a, 0)));
                     z1->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(b, 1)));
@@ -673,7 +574,6 @@ namespace CAS {
                     return result;
                 }
 
-                // Default: dot product for other dimensions
                 Exptree* dotResult = SimpUtil::makeFunction(FuncName::dot);
                 dotResult->child.push_back(SimpUtil::deepCopy(a));
                 dotResult->child.push_back(SimpUtil::deepCopy(b));
@@ -690,6 +590,105 @@ namespace CAS {
                 SimpUtil::freeTree(node);
                 return dotResult;
             }
+        }
+
+        // Case 2: Scalar * vector
+        if (vectors.size() == 1 && matrices.empty()) {
+            Exptree* vec = vectors[0];
+            size_t sz = SimpUtil::vectorElemCount(vec);
+
+            Exptree* result = SimpUtil::makeFunction(FuncName::vector);
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)sz))));
+
+            for (size_t j = 0; j < sz; ++j) {
+                if (scalarProd) {
+                    Exptree* prod = SimpUtil::makeFunction("*");
+                    prod->child.push_back(SimpUtil::deepCopy(scalarProd));
+                    prod->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(vec, j)));
+                    prod = simplifyMul(prod);
+                    result->child.push_back(prod);
+                } else {
+                    result->child.push_back(SimpUtil::deepCopy(SimpUtil::vectorElem(vec, j)));
+                }
+            }
+
+            if (scalarProd) SimpUtil::freeTree(scalarProd);
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // Case 3: Scalar * matrix
+        if (vectors.empty() && matrices.size() == 1) {
+            Exptree* mat = matrices[0];
+            size_t m = 0, n = 0;
+            SimpUtil::matrixDims(mat, m, n);
+
+            Exptree* result = SimpUtil::makeFunction(FuncName::matrix);
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)m))));
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)n))));
+
+            for (size_t r = 0; r < m; ++r) {
+                for (size_t c = 0; c < n; ++c) {
+                    if (scalarProd) {
+                        Exptree* prod = SimpUtil::makeFunction("*");
+                        prod->child.push_back(SimpUtil::deepCopy(scalarProd));
+                        prod->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(mat, r, c, n)));
+                        prod = simplifyMul(prod);
+                        result->child.push_back(prod);
+                    } else {
+                        result->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(mat, r, c, n)));
+                    }
+                }
+            }
+
+            if (scalarProd) SimpUtil::freeTree(scalarProd);
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // Case 4: Matrix * Matrix
+        if (vectors.empty() && matrices.size() == 2) {
+            Exptree* A = matrices[0];
+            Exptree* B = matrices[1];
+            size_t mA = 0, nA = 0, mB = 0, nB = 0;
+            if (!SimpUtil::matrixDims(A, mA, nA) || !SimpUtil::matrixDims(B, mB, nB)) {
+                if (scalarProd) SimpUtil::freeTree(scalarProd);
+                return node;
+            }
+            if (nA != mB) {
+                if (scalarProd) SimpUtil::freeTree(scalarProd);
+                return node;
+            }
+
+            Exptree* result = SimpUtil::makeFunction(FuncName::matrix);
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)mA))));
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)nB))));
+
+            for (size_t r = 0; r < mA; ++r) {
+                for (size_t c = 0; c < nB; ++c) {
+                    Exptree* sum = SimpUtil::makeFunction("+");
+                    for (size_t k = 0; k < nA; ++k) {
+                        Exptree* prod = SimpUtil::makeFunction("*");
+                        prod->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(A, r, k, nA)));
+                        prod->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(B, k, c, nB)));
+                        prod = simplifyMul(prod);
+                        sum->child.push_back(prod);
+                    }
+                    sum = simplifyAdd(sum);
+
+                    if (scalarProd) {
+                        Exptree* scaled = SimpUtil::makeFunction("*");
+                        scaled->child.push_back(SimpUtil::deepCopy(scalarProd));
+                        scaled->child.push_back(sum);
+                        sum = simplifyMul(scaled);
+                    }
+                    result->child.push_back(sum);
+                }
+            }
+
+            if (scalarProd) SimpUtil::freeTree(scalarProd);
+            SimpUtil::freeTree(node);
+            return result;
         }
 
         if (scalarProd) SimpUtil::freeTree(scalarProd);

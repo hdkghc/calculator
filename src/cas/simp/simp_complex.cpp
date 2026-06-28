@@ -106,6 +106,7 @@ namespace CAS {
             return false;
         }
 
+        // Use TreeSimplifier's simplifyAdd via the reference
         realPart = realSum ? simp.simplifyAdd(realSum) : SimpUtil::makeRational(Rational(Intg(0)));
         imagPart = imagSum ? simp.simplifyAdd(imagSum) : SimpUtil::makeRational(Rational(Intg(0)));
         return true;
@@ -119,8 +120,9 @@ namespace CAS {
 
         // re(real) = real
         if (SimpUtil::isRational(arg) || SimpUtil::isVariable(arg)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // re(a + b*i) = a
@@ -128,7 +130,6 @@ namespace CAS {
         Exptree* imagPart = nullptr;
         if (splitComplexSum(*this, arg, realPart, imagPart)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             if (imagPart) SimpUtil::freeTree(imagPart);
             return realPart;
         }
@@ -136,7 +137,6 @@ namespace CAS {
         // re(i) = 0
         if (SimpUtil::isConstantI(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
@@ -154,7 +154,6 @@ namespace CAS {
                 // For pure imaginary: re(i*x) = 0
                 if (arg->child.size() == 2) {
                     SimpUtil::freeTree(node);
-                    SimpUtil::freeTree(arg);
                     return SimpUtil::makeRational(Rational(Intg(0)));
                 }
                 // Multiple factors: if i is present, entire thing is imaginary
@@ -166,12 +165,10 @@ namespace CAS {
                 }
                 if (allHaveI) {
                     SimpUtil::freeTree(node);
-                    SimpUtil::freeTree(arg);
                     return SimpUtil::makeRational(Rational(Intg(0)));
                 }
                 // Conservative: assume any i factor makes it imaginary
                 SimpUtil::freeTree(node);
-                SimpUtil::freeTree(arg);
                 return SimpUtil::makeRational(Rational(Intg(0)));
             }
         }
@@ -188,21 +185,18 @@ namespace CAS {
         // im(real) = 0
         if (SimpUtil::isRational(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // im(variable) = 0 (unless it's i itself)
         if (SimpUtil::isVariable(arg) && !SimpUtil::isConstantI(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // im(i) = 1
         if (SimpUtil::isConstantI(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
@@ -211,7 +205,6 @@ namespace CAS {
         Exptree* imagPart = nullptr;
         if (splitComplexSum(*this, arg, realPart, imagPart)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             if (realPart) SimpUtil::freeTree(realPart);
             return imagPart;
         }
@@ -229,7 +222,6 @@ namespace CAS {
             }
             if (hasI) {
                 SimpUtil::freeTree(node);
-                SimpUtil::freeTree(arg);
                 if (coeff->child.size() == 1) {
                     Exptree* result = coeff->child[0];
                     coeff->child.clear();
@@ -255,14 +247,14 @@ namespace CAS {
 
         // conj(real) = real
         if (SimpUtil::isRational(arg) || (SimpUtil::isVariable(arg) && !SimpUtil::isConstantI(arg))) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // conj(i) = -i
         if (SimpUtil::isConstantI(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             Exptree* result = SimpUtil::makeFunction("*");
             result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
             result->child.push_back(SimpUtil::makeVariable(ConstName::i));
@@ -274,7 +266,6 @@ namespace CAS {
         Exptree* imagPart = nullptr;
         if (splitComplexSum(*this, arg, realPart, imagPart)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
 
             // Build: realPart + (-1)*imagPart*i
             Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
@@ -304,11 +295,12 @@ namespace CAS {
                 }
             }
             if (hasI) {
+                Exptree* argCopy = SimpUtil::deepCopy(arg);
                 SimpUtil::freeTree(node);
                 Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
                 Exptree* result = SimpUtil::makeFunction("*");
                 result->child.push_back(negOne);
-                result->child.push_back(arg);
+                result->child.push_back(argCopy);
                 return simplifyMul(result);
             }
         }
@@ -325,14 +317,12 @@ namespace CAS {
         // arg(positive real) = 0
         if (SimpUtil::isPositive(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // arg(negative real) = pi
         if (SimpUtil::isNegative(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             return SimpUtil::makeVariable(ConstName::pi);
         }
 
@@ -344,7 +334,6 @@ namespace CAS {
         // arg(i) = pi/2
         if (SimpUtil::isConstantI(arg)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
             Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
             Exptree* result = SimpUtil::makeFunction("*");
             result->child.push_back(half);
@@ -356,7 +345,6 @@ namespace CAS {
         if (SimpUtil::isFunction(arg, "*") && arg->child.size() == 2) {
             if (SimpUtil::isMinusOne(arg->child[0]) && SimpUtil::isConstantI(arg->child[1])) {
                 SimpUtil::freeTree(node);
-                SimpUtil::freeTree(arg);
                 Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
                 Exptree* negPi = SimpUtil::makeFunction("*");
                 negPi->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
@@ -373,7 +361,6 @@ namespace CAS {
         Exptree* imagPart = nullptr;
         if (splitComplexSum(*this, arg, realPart, imagPart)) {
             SimpUtil::freeTree(node);
-            SimpUtil::freeTree(arg);
 
             Exptree* div = SimpUtil::makeFunction("/");
             div->child.push_back(imagPart);

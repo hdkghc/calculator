@@ -529,23 +529,28 @@ namespace CAS {
                     ret.setNaN();
                     return ret;
                 }
-                if(gl() < rhs.gl()) {
+
+                Intg tmp = this->abs();
+                Intg r = rhs.abs();
+                if(tmp.gl() < r.gl()) {
                     return Intg(0);
                 }
-                Intg tmp = *this;
                 Intg ret;
-                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
-                    Intg t = rhs;
+                for(size_t i = tmp.gl() - r.gl() + 1; i > 0; --i) {
+                    Intg t = r;
                     t.append0(i - 1);
-                    t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
                         ret.sdg(i - 1, ret[i - 1] + 1);
                     }
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;
+                if(ret.gl() == 0) {
+                    ret.f = 0;
+                }
                 return ret;
             }
+
             Intg operator%(Intg rhs) {
                 if(isInf() || isNaN() || rhs.isNaN() || rhs == Intg(0)) {
                     Intg ret;
@@ -560,17 +565,22 @@ namespace CAS {
                     ret.setNaN();
                     return ret;
                 }
-                if(gl() < rhs.gl()) {
+
+                Intg tmp = this->abs();
+                Intg r = rhs.abs();
+                if(tmp.gl() < r.gl()) {
                     return *this;
                 }
-                Intg tmp = *this;
-                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
-                    Intg t = rhs;
+                for(size_t i = tmp.gl() - r.gl() + 1; i > 0; --i) {
+                    Intg t = r;
                     t.append0(i - 1);
-                    t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
                     }
+                }
+                tmp.f = this->f & 0x01;
+                if(tmp.gl() == 0) {
+                    tmp.f = 0;
                 }
                 return tmp;
             }
@@ -606,21 +616,30 @@ namespace CAS {
                     ret.setNaN();
                     return std::make_pair(ret, ret);
                 }
-                if(gl() < rhs.gl()) {
-                    return std::make_pair(Intg(0), *this);
+
+                Intg tmp = this->abs();
+                Intg r = rhs.abs();
+                if(tmp.gl() < r.gl()) {
+                    Intg rem = *this;
+                    return std::make_pair(Intg(0), rem);
                 }
-                Intg tmp = *this;
                 Intg ret;
-                for(size_t i = tmp.gl() - rhs.gl() + 1; i > 0; --i) {
-                    Intg t = rhs;
+                for(size_t i = tmp.gl() - r.gl() + 1; i > 0; --i) {
+                    Intg t = r;
                     t.append0(i - 1);
-                    t.f &= 0xFE;
                     while(tmp >= t) {
                         tmp = tmp - t;
                         ret.sdg(i - 1, ret[i - 1] + 1);
                     }
                 }
                 ret.f = (this->f ^ rhs.f) & 0x01;
+                if(ret.gl() == 0) {
+                    ret.f = 0;
+                }
+                tmp.f = this->f & 0x01;
+                if(tmp.gl() == 0) {
+                    tmp.f = 0;
+                }
                 return std::make_pair(ret, tmp);
             }
             /** @name pow
@@ -711,6 +730,7 @@ namespace CAS {
                 for(size_t i = gl() + 1; i >= 1; i--) {
                     ret = ret * 10 + (*this)[i - 1];
                 }
+                return ret;
             }
     }; // class Intg
 } // namespace CAS

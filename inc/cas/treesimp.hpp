@@ -109,6 +109,16 @@ namespace CAS {
         // ========== Core recursive simplification ==========
 
         /**
+         *  @name simplifyNodeOnce
+         *  @brief Recursively simplify an expression node bottom-up once
+         *  @param node Pointer to the node to simplify
+         *  @return Pointer to the simplified node (may differ from input)
+         *  @details Children simplified first, then dispatches to specialized
+         *           simplifiers based on function name.
+         */
+        Exptree* simplifyNodeOnce(Exptree* node);
+
+        /**
          *  @name simplifyNode
          *  @brief Recursively simplify an expression node bottom-up
          *  @param node Pointer to the node to simplify

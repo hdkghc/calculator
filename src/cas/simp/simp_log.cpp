@@ -29,9 +29,10 @@ namespace CAS {
 
         Exptree* arg = node->child[0];
 
-        // ln(0) -> undefined, leave as-is
+        // ln(0) = -inf
         if (SimpUtil::isZero(arg)) {
-            return node;
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg("-inf")));
         }
 
         // ln(1) = 0 (exact)

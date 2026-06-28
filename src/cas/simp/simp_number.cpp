@@ -30,8 +30,13 @@ namespace CAS {
         Exptree* a = node->child[0];
         Exptree* b = node->child[1];
 
-        // mod(a, 0) -> undefined, leave as-is
-        if (SimpUtil::isZero(b)) return node;
+        // mod(a, 0) -> NaN
+        if (SimpUtil::isZero(b)) {
+            SimpUtil::freeTree(a);
+            SimpUtil::freeTree(b);
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg("NaN")));
+        }
 
         // mod(0, b) = 0
         if (SimpUtil::isZero(a)) {
@@ -429,6 +434,84 @@ namespace CAS {
         return node;
     }
     
+    // ======== Factorial =========
+    
+    Exptree* TreeSimplifier::simplifyFact(Exptree* node) {
+        if (node->child.size() != 1) return node;
+
+        Exptree* arg = node->child[0];
+
+        // 0! = 1
+        if (SimpUtil::isZero(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // 1! = 1
+        if (SimpUtil::isOne(arg)) {
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // n! for integers
+        if (SimpUtil::isInteger(arg)) {
+            Intg n = arg->value.numerator();
+
+            if (n > Intg(0)) {
+                Intg result(1);
+                for (Intg i(2); i <= n; i = i + Intg(1)) {
+                    result = result * i;
+                }
+                SimpUtil::freeTree(node);
+                return SimpUtil::makeRational(Rational(result));
+            }
+
+            // Negative integer: Gamma pole -> NaN
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(Intg("NaN")));
+        }
+
+        // Non-integer: x! = Gamma(x+1) = integral from 0 to inf of t^x * e^(-t) dt
+        // Build: defint(t, 0, inf, *(^(t, x), ^(e, *(-1, t))))
+        Exptree* t = SimpUtil::makeVariable("t");
+
+        // x + 1
+        Exptree* xPlus1 = SimpUtil::makeFunction("+");
+        xPlus1->child.push_back(SimpUtil::deepCopy(arg));
+        xPlus1->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+        xPlus1 = simplifyAdd(xPlus1);
+
+        // t^x
+        Exptree* tPow = SimpUtil::makeFunction("^");
+        tPow->child.push_back(SimpUtil::deepCopy(t));
+        tPow->child.push_back(xPlus1);
+
+        // -t
+        Exptree* negT = SimpUtil::makeFunction("*");
+        negT->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+        negT->child.push_back(SimpUtil::deepCopy(t));
+
+        // e^(-t)
+        Exptree* eNegT = SimpUtil::makeFunction("^");
+        eNegT->child.push_back(SimpUtil::makeVariable(ConstName::e));
+        eNegT->child.push_back(negT);
+
+        // t^x * e^(-t)
+        Exptree* integrand = SimpUtil::makeFunction("*");
+        integrand->child.push_back(tPow);
+        integrand->child.push_back(eNegT);
+
+        // defint(t, 0, inf, integrand)
+        Exptree* result = SimpUtil::makeFunction(FuncName::defint);
+        result->child.push_back(SimpUtil::deepCopy(t));
+        result->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+        result->child.push_back(SimpUtil::makeRational(Rational(Intg("inf"))));
+        result->child.push_back(integrand);
+
+        SimpUtil::freeTree(node);
+        return result;
+    }
+
     // ========== Round ==========
 
     Exptree* TreeSimplifier::simplifyRound(Exptree* node) {

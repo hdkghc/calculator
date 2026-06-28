@@ -122,37 +122,6 @@ namespace CAS {
             return;
         }
 
-        // ---- deg(x) -> (pi/180) * x ----
-        if (node->var == FuncName::deg && node->child.size() == 1) {
-            Exptree* arg = node->child[0];
-            Exptree* piDiv180 = SimpUtil::makeRational(Rational(Intg(1), Intg(180)));
-            Exptree* piMul = SimpUtil::makeFunction("*");
-            piMul->child.push_back(piDiv180);
-            piMul->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            node->var = "*";
-            node->child.clear();
-            node->child.push_back(piMul);
-            node->child.push_back(arg);
-            return;
-        }
-
-        // ---- rad(x) -> (180/pi) * x ----
-        if (node->var == FuncName::rad && node->child.size() == 1) {
-            Exptree* arg = node->child[0];
-            Exptree* piInv = SimpUtil::makeFunction("^");
-            piInv->child.push_back(SimpUtil::makeVariable(ConstName::pi));
-            piInv->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            Exptree* coeff = SimpUtil::makeRational(Rational(Intg(180)));
-            Exptree* fullCoeff = SimpUtil::makeFunction("*");
-            fullCoeff->child.push_back(coeff);
-            fullCoeff->child.push_back(piInv);
-            node->var = "*";
-            node->child.clear();
-            node->child.push_back(fullCoeff);
-            node->child.push_back(arg);
-            return;
-        }
-
         // ---- sinh(x) -> (e^x - e^(-x)) / 2 ----
         if (node->var == FuncName::sinh && node->child.size() == 1) {
             Exptree* x = node->child[0];
@@ -170,18 +139,23 @@ namespace CAS {
             e_negX->child.push_back(SimpUtil::deepCopy(e));
             e_negX->child.push_back(negX);
 
-            Exptree* negE = SimpUtil::makeFunction("*");
-            negE->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negE->child.push_back(e_negX);
+            Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
 
+            // diff = e^x + (-1)*e^(-x)
             Exptree* diff = SimpUtil::makeFunction("+");
             diff->child.push_back(e_x);
-            diff->child.push_back(negE);
+            Exptree* negE_negX = SimpUtil::makeFunction("*");
+            negE_negX->child.push_back(negOne);
+            negE_negX->child.push_back(SimpUtil::deepCopy(e_negX));
+            diff->child.push_back(negE_negX);
+
+            SimpUtil::freeTree(e_negX);
 
             node->var = "/";
             node->child.clear();
             node->child.push_back(diff);
             node->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+
             return;
         }
 
@@ -202,6 +176,7 @@ namespace CAS {
             e_negX->child.push_back(SimpUtil::deepCopy(e));
             e_negX->child.push_back(negX);
 
+            // sum = e^x + e^(-x)
             Exptree* sum = SimpUtil::makeFunction("+");
             sum->child.push_back(e_x);
             sum->child.push_back(e_negX);
@@ -230,22 +205,58 @@ namespace CAS {
             e_negX->child.push_back(SimpUtil::deepCopy(e));
             e_negX->child.push_back(negX);
 
+            Exptree* negOne = SimpUtil::makeRational(Rational(Intg(-1)));
+
+            // num = e^x + (-1)*e^(-x)
             Exptree* num = SimpUtil::makeFunction("+");
             num->child.push_back(SimpUtil::deepCopy(e_x));
             Exptree* negE_negX = SimpUtil::makeFunction("*");
-            negE_negX->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negE_negX->child.push_back(e_negX);
+            negE_negX->child.push_back(negOne);
+            negE_negX->child.push_back(SimpUtil::deepCopy(e_negX));
             num->child.push_back(negE_negX);
 
+            // den = e^x + e^(-x)
             Exptree* den = SimpUtil::makeFunction("+");
             den->child.push_back(e_x);
-            den->child.push_back(SimpUtil::deepCopy(e_negX));
-            SimpUtil::freeTree(e_negX);
+            den->child.push_back(e_negX);
 
             node->var = "/";
             node->child.clear();
             node->child.push_back(num);
             node->child.push_back(den);
+            return;
+        }
+
+        // ---- deg(x) -> x * 180 / pi ----
+        if (node->var == FuncName::deg && node->child.size() == 1) {
+            Exptree* arg = node->child[0];
+            Exptree* mul = SimpUtil::makeFunction("*");
+            mul->child.push_back(SimpUtil::makeRational(Rational(Intg(180))));
+            mul->child.push_back(arg);
+            Exptree* divPi = SimpUtil::makeFunction("^");
+            divPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            divPi->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            node->var = "*";
+            node->child.clear();
+            node->child.push_back(mul);
+            node->child.push_back(divPi);
+            return;
+        }
+
+        // ---- rad(x) -> x * pi / 180 ----
+        if (node->var == FuncName::rad && node->child.size() == 1) {
+            Exptree* arg = node->child[0];
+            Exptree* pi = SimpUtil::makeVariable(ConstName::pi);
+            Exptree* mul = SimpUtil::makeFunction("*");
+            mul->child.push_back(arg);
+            mul->child.push_back(pi);
+            Exptree* div180 = SimpUtil::makeFunction("^");
+            div180->child.push_back(SimpUtil::makeRational(Rational(Intg(180))));
+            div180->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            node->var = "*";
+            node->child.clear();
+            node->child.push_back(mul);
+            node->child.push_back(div180);
             return;
         }
 

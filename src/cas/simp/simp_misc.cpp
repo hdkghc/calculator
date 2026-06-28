@@ -415,40 +415,40 @@ namespace CAS {
         return node;
     }
 
-    // ========== Factorial ==========
+    // // ========== Factorial ==========
 
-    Exptree* TreeSimplifier::simplifyFact(Exptree* node) {
-        if (node->child.size() != 1) return node;
+    // Exptree* TreeSimplifier::simplifyFact(Exptree* node) {
+    //     if (node->child.size() != 1) return node;
 
-        Exptree* arg = node->child[0];
+    //     Exptree* arg = node->child[0];
 
-        // 0! = 1
-        if (SimpUtil::isZero(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(1)));
-        }
+    //     // 0! = 1
+    //     if (SimpUtil::isZero(arg)) {
+    //         SimpUtil::freeTree(node);
+    //         return SimpUtil::makeRational(Rational(Intg(1)));
+    //     }
 
-        // 1! = 1
-        if (SimpUtil::isOne(arg)) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(1)));
-        }
+    //     // 1! = 1
+    //     if (SimpUtil::isOne(arg)) {
+    //         SimpUtil::freeTree(node);
+    //         return SimpUtil::makeRational(Rational(Intg(1)));
+    //     }
 
-        // n! for small positive integers
-        if (SimpUtil::isInteger(arg) && SimpUtil::isPositive(arg)) {
-            Intg n = arg->value.numerator();
-            if (n <= Intg(20)) {
-                Intg result(1);
-                for (Intg i(2); i <= n; i = i + Intg(1)) {
-                    result = result * i;
-                }
-                SimpUtil::freeTree(node);
-                return SimpUtil::makeRational(Rational(result));
-            }
-        }
+    //     // n! for small positive integers
+    //     if (SimpUtil::isInteger(arg) && SimpUtil::isPositive(arg)) {
+    //         Intg n = arg->value.numerator();
+    //         if (n <= Intg(20)) {
+    //             Intg result(1);
+    //             for (Intg i(2); i <= n; i = i + Intg(1)) {
+    //                 result = result * i;
+    //             }
+    //             SimpUtil::freeTree(node);
+    //             return SimpUtil::makeRational(Rational(result));
+    //         }
+    //     }
 
-        return node;
-    }
+    //     return node;
+    // }
 
     // ========== Deg ==========
 

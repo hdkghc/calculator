@@ -22,7 +22,7 @@
 
 namespace CAS {
 
-    Exptree* TreeSimplifier::simplifyNode(Exptree* node) {
+    Exptree* TreeSimplifier::simplifyNodeOnce(Exptree* node) {
         if (!node) return nullptr;
         if (node->valtp == Exptree::val_t::valRational ||
             node->valtp == Exptree::val_t::valVariable) {
@@ -30,16 +30,28 @@ namespace CAS {
         }
         if (node->valtp != Exptree::val_t::valFunction) return node;
 
+        const std::string& func = node->var;
+
+        // All nodes that need preTransform before recursive simplification
+        if (func == "-" || func == "/" ||
+            func == FuncName::sqrt || func == FuncName::exp ||
+            func == FuncName::root ||
+            func == FuncName::sinh || func == FuncName::cosh || func == FuncName::tanh ||
+            func == FuncName::asinh || func == FuncName::acosh || func == FuncName::atanh ||
+            func == FuncName::deg || func == FuncName::rad ||
+            SimpUtil::isConstantPhi(node)) {
+            preTransform(node);
+            return simplifyNode(node);
+        }
+
         for (size_t i = 0; i < node->child.size(); ++i) {
             node->child[i] = simplifyNode(node->child[i]);
         }
 
-        const std::string& func = node->var;
-
         // Arithmetic
-        if (func == "+")                    return simplifyAdd(node);
-        if (func == "*")                    return simplifyMul(node);
-        if (func == "^")                    return simplifyPow(node);
+        if (func == "+") return simplifyAdd(node);
+        if (func == "*") return simplifyMul(node);
+        if (func == "^") return simplifyPow(node);
 
         // Trigonometric
         if (func == FuncName::sin)          return simplifySin(node);
@@ -113,6 +125,19 @@ namespace CAS {
         if (func == FuncName::transpose)    return simplifyTranspose(node);
 
         return node;
+    }
+    
+    Exptree* TreeSimplifier::simplifyNode(Exptree* node) {
+        if (!node) return nullptr;
+
+        Exptree* result = node;
+        // Exptree* prev;
+        for (int8_t i = 0; i < 3; ++i) {
+            // prev = result;
+            result = simplifyNodeOnce(result);
+        }
+
+        return result;
     }
 
 } // namespace CAS

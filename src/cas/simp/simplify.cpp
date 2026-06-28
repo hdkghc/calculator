@@ -26,12 +26,9 @@ namespace CAS {
 
     Exptree* TreeSimplifier::simplify(Exptree*& root) {
         if (!root) return nullptr;
-
         TreeSimplifier& simp = instance();
-
-        simp.preTransform(root);
         root = simp.simplifyNode(root);
-
+        
         return root;
     }
 

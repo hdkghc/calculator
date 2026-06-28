@@ -29,7 +29,7 @@ namespace CAS {
      *  @param b Second integer
      *  @return GCD of a and b
      */
-    Intg gcd(Intg a, Intg b) {
+    inline Intg gcd(Intg a, Intg b) {
         if (b > a) std::swap(a, b);
         if (b == Intg(0)) return a;
         return gcd(b, a % b);
@@ -40,7 +40,7 @@ namespace CAS {
      *  @param b Second integer
      *  @return LCM of a and b
      */
-    Intg lcm(Intg a, Intg b) {
+    inline Intg lcm(Intg a, Intg b) {
         if (a == Intg(0) || b == Intg(0)) return Intg(0);
         return (a / gcd(a, b)) * b;
     }
