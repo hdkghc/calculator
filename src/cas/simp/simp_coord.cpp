@@ -30,31 +30,31 @@ namespace CAS {
         Exptree* x = node->child[0];
         Exptree* y = node->child[1];
 
-        // polar(0, 0) = 0 (magnitude 0)
+        // polar(0, 0) = 0
         if (SimpUtil::isZero(x) && SimpUtil::isZero(y)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
-        // polar(x, 0) = |x| (on real axis)
+        // polar(x, 0) = abs(x)
         if (SimpUtil::isZero(y)) {
-            SimpUtil::freeTree(y);
+            Exptree* xCopy = SimpUtil::deepCopy(x);
             SimpUtil::freeTree(node);
             Exptree* absNode = SimpUtil::makeFunction(FuncName::abs);
-            absNode->child.push_back(x);
+            absNode->child.push_back(xCopy);
             return simplifyAbs(absNode);
         }
 
-        // polar(0, y) = |y| (on imaginary axis)
+        // polar(0, y) = abs(y)
         if (SimpUtil::isZero(x)) {
-            SimpUtil::freeTree(x);
+            Exptree* yCopy = SimpUtil::deepCopy(y);
             SimpUtil::freeTree(node);
             Exptree* absNode = SimpUtil::makeFunction(FuncName::abs);
-            absNode->child.push_back(y);
+            absNode->child.push_back(yCopy);
             return simplifyAbs(absNode);
         }
 
-        // polar(x, y) = sqrt(x^2 + y^2) for magnitude
+        // polar(x, y) = sqrt(x^2 + y^2)
         Exptree* xSq = SimpUtil::makeFunction("^");
         xSq->child.push_back(SimpUtil::deepCopy(x));
         xSq->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
@@ -84,19 +84,18 @@ namespace CAS {
 
         // rect(0, theta) = 0
         if (SimpUtil::isZero(r)) {
-            SimpUtil::freeTree(theta);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
-        // rect(r, 0) = r (pure real)
+        // rect(r, 0) = r
         if (SimpUtil::isZero(theta)) {
-            SimpUtil::freeTree(theta);
+            Exptree* rCopy = SimpUtil::deepCopy(r);
             SimpUtil::freeTree(node);
-            return r;
+            return rCopy;
         }
 
-        // rect(r, pi/2) = r*i (pure imaginary)
+        // rect(r, pi/2) = r*i
         if (SimpUtil::isFunction(theta, "*") && theta->child.size() >= 2) {
             bool hasPi = false;
             Rational coeff(Intg(0));
@@ -106,17 +105,16 @@ namespace CAS {
                     coeff = theta->child[i]->value;
             }
             if (hasPi && coeff == Rational(Intg(1), Intg(2))) {
-                SimpUtil::freeTree(theta);
+                Exptree* rCopy = SimpUtil::deepCopy(r);
                 SimpUtil::freeTree(node);
                 Exptree* result = SimpUtil::makeFunction("*");
-                result->child.push_back(r);
+                result->child.push_back(rCopy);
                 result->child.push_back(SimpUtil::makeVariable(ConstName::i));
                 return simplifyMul(result);
             }
         }
 
-        // rect(r, theta) -> (r*cos(theta), r*sin(theta))
-        // Return as complex number: r*cos(theta) + i*r*sin(theta)
+        // rect(r, theta) = r*cos(theta) + i*r*sin(theta)
         Exptree* cosTerm = SimpUtil::makeFunction(FuncName::cos);
         cosTerm->child.push_back(SimpUtil::deepCopy(theta));
 

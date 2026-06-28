@@ -173,14 +173,16 @@ namespace CAS {
 
         // abs(abs(x)) = abs(x)
         if (SimpUtil::isFunction(arg, FuncName::abs)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // abs(n) = n for n > 0
         if (SimpUtil::isPositive(arg)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // abs(-n) = n for n < 0
