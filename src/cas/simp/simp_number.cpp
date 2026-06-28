@@ -32,31 +32,24 @@ namespace CAS {
 
         // mod(a, 0) -> NaN
         if (SimpUtil::isZero(b)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg("NaN")));
         }
 
         // mod(0, b) = 0
         if (SimpUtil::isZero(a)) {
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // mod(a, 1) = 0
         if (SimpUtil::isOne(b)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // mod(a, -1) = 0
         if (SimpUtil::isMinusOne(b)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
@@ -111,28 +104,23 @@ namespace CAS {
 
         // gcd(a, 1) = 1
         if (SimpUtil::isOne(b) || SimpUtil::isMinusOne(b)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
         // gcd(1, b) = 1
         if (SimpUtil::isOne(a) || SimpUtil::isMinusOne(a)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
-        // Compute for integer arguments
+        // Compute for integer arguments using Euclidean algorithm
         if (SimpUtil::isInteger(a) && SimpUtil::isInteger(b)) {
             Intg aVal = a->value.numerator();
             Intg bVal = b->value.numerator();
             if (aVal < Intg(0)) aVal = Intg(0) - aVal;
             if (bVal < Intg(0)) bVal = Intg(0) - bVal;
 
-            // Euclidean algorithm
             while (!(bVal == Intg(0))) {
                 Intg temp = bVal;
                 bVal = aVal % bVal;
@@ -156,16 +144,12 @@ namespace CAS {
 
         // lcm(a, 0) = 0
         if (SimpUtil::isZero(b)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
 
         // lcm(0, b) = 0
         if (SimpUtil::isZero(a)) {
-            SimpUtil::freeTree(a);
-            SimpUtil::freeTree(b);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
@@ -192,14 +176,13 @@ namespace CAS {
             return node;
         }
 
-        // Compute for integer arguments: lcm = |a*b| / gcd(a,b)
+        // lcm = |a*b| / gcd(a,b)
         if (SimpUtil::isInteger(a) && SimpUtil::isInteger(b)) {
             Intg aVal = a->value.numerator();
             Intg bVal = b->value.numerator();
             if (aVal < Intg(0)) aVal = Intg(0) - aVal;
             if (bVal < Intg(0)) bVal = Intg(0) - bVal;
 
-            // gcd
             Intg aa = aVal, bb = bVal;
             while (!(bb == Intg(0))) {
                 Intg temp = bb;
@@ -226,15 +209,16 @@ namespace CAS {
 
         // floor(integer) = integer
         if (SimpUtil::isInteger(arg)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // floor(positive rational) = integer part
         if (SimpUtil::isRational(arg) && SimpUtil::isPositive(arg)) {
             Intg num = arg->value.numerator();
             Intg den = arg->value.den;
-            Intg result = num / den;  // Integer division truncates toward zero
+            Intg result = num / den;
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(result));
         }
@@ -243,8 +227,6 @@ namespace CAS {
         if (SimpUtil::isRational(arg) && SimpUtil::isNegative(arg)) {
             Intg num = arg->value.numerator();
             Intg den = arg->value.den;
-            // For negative numbers, integer division truncates toward zero
-            // floor(-3/2) = -2, but (-3)/2 = -1 in C++ integer division
             Intg result = num / den;
             if (!(num % den == Intg(0)) && num < Intg(0)) {
                 result = result - Intg(1);
@@ -264,8 +246,9 @@ namespace CAS {
 
         // ceil(integer) = integer
         if (SimpUtil::isInteger(arg)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
             SimpUtil::freeTree(node);
-            return arg;
+            return result;
         }
 
         // ceil(positive rational)
@@ -284,7 +267,38 @@ namespace CAS {
         if (SimpUtil::isRational(arg) && SimpUtil::isNegative(arg)) {
             Intg num = arg->value.numerator();
             Intg den = arg->value.den;
-            Intg result = num / den;  // Truncates toward zero
+            Intg result = num / den;
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(result));
+        }
+
+        return node;
+    }
+
+    // ========== Round ==========
+
+    Exptree* TreeSimplifier::simplifyRound(Exptree* node) {
+        if (node->child.size() != 1) return node;
+        Exptree* arg = node->child[0];
+
+        // round(integer) = integer
+        if (SimpUtil::isInteger(arg)) {
+            Exptree* result = SimpUtil::deepCopy(arg);
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // round(rational) = nearest integer
+        if (SimpUtil::isRational(arg)) {
+            Intg num = arg->value.numerator();
+            Intg den = arg->value.den;
+            bool isNeg = (num < Intg(0));
+            if (isNeg) num = Intg(0) - num;
+
+            Intg halfDen = den / Intg(2);
+            Intg result = (num + halfDen) / den;
+            if (isNeg) result = Intg(0) - result;
+
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(result));
         }
@@ -324,6 +338,66 @@ namespace CAS {
         return node;
     }
 
+    // ========== Max ==========
+
+    Exptree* TreeSimplifier::simplifyMax(Exptree* node) {
+        if (node->child.size() < 2) return node;
+
+        Exptree* a = node->child[0];
+        Exptree* b = node->child[1];
+
+        // max(a, b) where both are rational
+        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
+            Exptree* result;
+            if (a->value >= b->value) {
+                result = SimpUtil::deepCopy(a);
+            } else {
+                result = SimpUtil::deepCopy(b);
+            }
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // max(a, a) = a
+        if (SimpUtil::compareNodes(a, b) == 0) {
+            Exptree* result = SimpUtil::deepCopy(a);
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        return node;
+    }
+
+    // ========== Min ==========
+
+    Exptree* TreeSimplifier::simplifyMin(Exptree* node) {
+        if (node->child.size() < 2) return node;
+
+        Exptree* a = node->child[0];
+        Exptree* b = node->child[1];
+
+        // min(a, b) where both are rational
+        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
+            Exptree* result;
+            if (a->value <= b->value) {
+                result = SimpUtil::deepCopy(a);
+            } else {
+                result = SimpUtil::deepCopy(b);
+            }
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // min(a, a) = a
+        if (SimpUtil::compareNodes(a, b) == 0) {
+            Exptree* result = SimpUtil::deepCopy(a);
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        return node;
+    }
+
     // ========== Permut ==========
 
     Exptree* TreeSimplifier::simplifyPermut(Exptree* node) {
@@ -334,17 +408,15 @@ namespace CAS {
 
         // P(n, 0) = 1
         if (SimpUtil::isZero(k)) {
-            SimpUtil::freeTree(n);
-            SimpUtil::freeTree(k);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
         // P(n, 1) = n
         if (SimpUtil::isOne(k)) {
-            SimpUtil::freeTree(k);
+            Exptree* result = SimpUtil::deepCopy(n);
             SimpUtil::freeTree(node);
-            return n;
+            return result;
         }
 
         // Compute for small non-negative integers
@@ -359,15 +431,12 @@ namespace CAS {
             }
 
             // P(n,k) = n*(n-1)*...*(n-k+1)
-            // Limit to avoid overflow
-            if (nVal <= Intg(20)) {
-                Intg result(1);
-                for (Intg i(0); i < kVal; i = i + Intg(1)) {
-                    result = result * (nVal - i);
-                }
-                SimpUtil::freeTree(node);
-                return SimpUtil::makeRational(Rational(result));
+            Intg result(1);
+            for (Intg i(0); i < kVal; i = i + Intg(1)) {
+                result = result * (nVal - i);
             }
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(result));
         }
 
         return node;
@@ -383,17 +452,15 @@ namespace CAS {
 
         // C(n, 0) = 1
         if (SimpUtil::isZero(k)) {
-            SimpUtil::freeTree(n);
-            SimpUtil::freeTree(k);
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
         // C(n, 1) = n
         if (SimpUtil::isOne(k)) {
-            SimpUtil::freeTree(k);
+            Exptree* result = SimpUtil::deepCopy(n);
             SimpUtil::freeTree(node);
-            return n;
+            return result;
         }
 
         // C(n, n) = 1
@@ -404,7 +471,7 @@ namespace CAS {
             }
         }
 
-        // Compute for small non-negative integers
+        // Compute for non-negative integers
         if (SimpUtil::isInteger(n) && SimpUtil::isInteger(k) &&
             SimpUtil::isPositive(n) && !SimpUtil::isNegative(k)) {
             Intg nVal = n->value.numerator();
@@ -420,15 +487,13 @@ namespace CAS {
                 kVal = nVal - kVal;
             }
 
-            if (nVal <= Intg(20)) {
-                Intg result(1);
-                for (Intg i(0); i < kVal; i = i + Intg(1)) {
-                    result = result * (nVal - i);
-                    result = result / (i + Intg(1));
-                }
-                SimpUtil::freeTree(node);
-                return SimpUtil::makeRational(Rational(result));
+            Intg result(1);
+            for (Intg i(0); i < kVal; i = i + Intg(1)) {
+                result = result * (nVal - i);
+                result = result / (i + Intg(1));
             }
+            SimpUtil::freeTree(node);
+            return SimpUtil::makeRational(Rational(result));
         }
 
         return node;
@@ -510,98 +575,5 @@ namespace CAS {
 
         SimpUtil::freeTree(node);
         return result;
-    }
-
-    // ========== Round ==========
-
-    Exptree* TreeSimplifier::simplifyRound(Exptree* node) {
-        if (node->child.size() != 1) return node;
-        Exptree* arg = node->child[0];
-
-        // round(integer) = integer
-        if (SimpUtil::isInteger(arg)) {
-            SimpUtil::freeTree(node);
-            return arg;
-        }
-
-        // round(rational) = nearest integer
-        if (SimpUtil::isRational(arg)) {
-            Intg num = arg->value.numerator();
-            Intg den = arg->value.den;
-            bool isNeg = (num < Intg(0));
-            if (isNeg) num = Intg(0) - num;
-
-            // Compute round(num/den) = floor((num + den/2) / den)
-            Intg halfDen = den / Intg(2);
-            Intg result = (num + halfDen) / den;
-            if (isNeg) result = Intg(0) - result;
-
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(result));
-        }
-
-        return node;
-    }
-
-    // ========== Max ==========
-
-    Exptree* TreeSimplifier::simplifyMax(Exptree* node) {
-        if (node->child.size() < 2) return node;
-
-        Exptree* a = node->child[0];
-        Exptree* b = node->child[1];
-
-        // max(a, b) where both are rational
-        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
-            if (a->value >= b->value) {
-                SimpUtil::freeTree(b);
-                SimpUtil::freeTree(node);
-                return a;
-            } else {
-                SimpUtil::freeTree(a);
-                SimpUtil::freeTree(node);
-                return b;
-            }
-        }
-
-        // max(a, a) = a
-        if (SimpUtil::compareNodes(a, b) == 0) {
-            SimpUtil::freeTree(b);
-            SimpUtil::freeTree(node);
-            return a;
-        }
-
-        return node;
-    }
-
-    // ========== Min ==========
-
-    Exptree* TreeSimplifier::simplifyMin(Exptree* node) {
-        if (node->child.size() < 2) return node;
-
-        Exptree* a = node->child[0];
-        Exptree* b = node->child[1];
-
-        // min(a, b) where both are rational
-        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
-            if (a->value <= b->value) {
-                SimpUtil::freeTree(b);
-                SimpUtil::freeTree(node);
-                return a;
-            } else {
-                SimpUtil::freeTree(a);
-                SimpUtil::freeTree(node);
-                return b;
-            }
-        }
-
-        // min(a, a) = a
-        if (SimpUtil::compareNodes(a, b) == 0) {
-            SimpUtil::freeTree(b);
-            SimpUtil::freeTree(node);
-            return a;
-        }
-
-        return node;
     }
 } // namespace CAS
