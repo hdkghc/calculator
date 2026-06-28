@@ -37,8 +37,8 @@ namespace CAS {
      *           Designed for the RP2040 microcontroller's memory constraints.
      */
     class ExptreePool {
-        /** @brief Number of pre-allocated nodes (48) */
-        static constexpr size_t POOL_SIZE = 48;
+        /** @brief Number of pre-allocated nodes (64) */
+        static constexpr size_t POOL_SIZE = 64;
         /** @brief Pre-reserved child pointer capacity per node (6) */
         static constexpr size_t MAX_CHILDREN = 6;
 

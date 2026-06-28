@@ -23,33 +23,39 @@
 namespace CAS {
 
     Exptree* TreeSimplifier::simplifySinh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
     Exptree* TreeSimplifier::simplifyCosh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
     Exptree* TreeSimplifier::simplifyTanh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
     Exptree* TreeSimplifier::simplifyAsinh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
     Exptree* TreeSimplifier::simplifyAcosh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
     Exptree* TreeSimplifier::simplifyAtanh(Exptree* node) {
-        preTransform(node);
-        return simplifyNode(node);
+        // preTransform(node);
+        // return simplifyNode(node);
+        return node;
     }
 
 } // namespace CAS

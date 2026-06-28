@@ -283,10 +283,9 @@ namespace CAS {
         // calls simplifySinh which calls preTransform + simplifyNode
         Exptree* inner = nullptr;
         if (extractImaginaryArg(arg, inner)) {
+            inner = simplifyNode(inner);
             Exptree* sinhNode = SimpUtil::makeFunction(FuncName::sinh);
             sinhNode->child.push_back(inner);
-            // Simplify the sinh node to trigger exponential conversion
-            sinhNode = simplifySinh(sinhNode);
             Exptree* result = SimpUtil::makeFunction("*");
             result->child.push_back(SimpUtil::makeVariable(ConstName::i));
             result->child.push_back(sinhNode);
@@ -342,10 +341,10 @@ namespace CAS {
         // calls simplifyCosh which calls preTransform + simplifyNode
         Exptree* inner = nullptr;
         if (extractImaginaryArg(arg, inner)) {
+            inner = simplifyNode(inner);
             Exptree* coshNode = SimpUtil::makeFunction(FuncName::cosh);
             coshNode->child.push_back(inner);
             // Simplify the cosh node to trigger exponential conversion
-            coshNode = simplifyCosh(coshNode);
             SimpUtil::freeTree(node);
             return coshNode;
         }
@@ -394,10 +393,10 @@ namespace CAS {
         // calls simplifyTanh which calls preTransform + simplifyNode
         Exptree* inner = nullptr;
         if (extractImaginaryArg(arg, inner)) {
+            inner = simplifyNode(inner);
             Exptree* tanhNode = SimpUtil::makeFunction(FuncName::tanh);
             tanhNode->child.push_back(inner);
             // Simplify the tanh node to trigger exponential conversion
-            tanhNode = simplifyTanh(tanhNode);
             Exptree* result = SimpUtil::makeFunction("*");
             result->child.push_back(SimpUtil::makeVariable(ConstName::i));
             result->child.push_back(tanhNode);

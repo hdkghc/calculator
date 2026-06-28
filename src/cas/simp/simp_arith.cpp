@@ -431,12 +431,20 @@ namespace CAS {
                 if (!thetaPart) {
                     thetaPart = expArg->child[i];
                 } else {
-                    return nullptr; // Too many non-i factors
+                    // Multiple non-i factors: multiply them together
+                    Exptree* prod = SimpUtil::makeFunction("*");
+                    prod->child.push_back(thetaPart);
+                    prod->child.push_back(expArg->child[i]);
+                    thetaPart = prod;
                 }
             }
         }
 
-        if (hasI && thetaPart) {
+        if (hasI) {
+            if (!thetaPart) {
+                thetaPart = SimpUtil::makeRational(Rational(Intg(1)));
+            }
+
             // e^(i*theta) = cos(theta) + i*sin(theta)
             Exptree* cosTerm = SimpUtil::makeFunction(FuncName::cos);
             cosTerm->child.push_back(SimpUtil::deepCopy(thetaPart));
@@ -774,6 +782,14 @@ namespace CAS {
             bool canCombine = SimpUtil::isPositive(base->child[0]);
             if (!canCombine && SimpUtil::isRational(base->child[1]) && SimpUtil::isRational(exp)) {
                 canCombine = base->child[1]->value.isInteger() && exp->value.isInteger();
+            }
+            // Also allow if the resulting exponent simplifies to an integer
+            // e.g. (x^(1/2))^2 -> x^1 -> x
+            if (!canCombine && SimpUtil::isRational(base->child[1]) && SimpUtil::isRational(exp)) {
+                Rational newExpVal = base->child[1]->value * exp->value;
+                if (newExpVal.isInteger()) {
+                    canCombine = true;
+                }
             }
 
             if (canCombine) {

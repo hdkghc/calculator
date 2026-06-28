@@ -142,6 +142,43 @@ namespace CAS {
             }
         }
 
+        // ln(rational): try to express as ln(a^b) = b*ln(a)
+        if (SimpUtil::isRational(arg) && SimpUtil::isPositive(arg)) {
+            Intg num = arg->value.numerator();
+            Intg den = arg->value.den;
+
+            // Factorize numerator
+            if (den == Intg(1) && num > Intg(1)) {
+                // Try powers of small primes
+                Intg smallPrimes[] = {Intg(2), Intg(3), Intg(5), Intg(7)};
+                for (int p = 0; p < 4; ++p) {
+                    Intg n = num;
+                    Intg expCount(0);
+                    while (n % smallPrimes[p] == Intg(0)) {
+                        n = n / smallPrimes[p];
+                        expCount = expCount + Intg(1);
+                    }
+                    if (expCount > Intg(0) && n == Intg(1)) {
+                        // num = prime^expCount
+                        SimpUtil::freeTree(node);
+                        Exptree* result = SimpUtil::makeFunction("*");
+                        result->child.push_back(SimpUtil::makeRational(Rational(expCount)));
+                        Exptree* lnPrime = SimpUtil::makeFunction(FuncName::ln);
+                        lnPrime->child.push_back(SimpUtil::makeRational(Rational(smallPrimes[p])));
+                        result->child.push_back(lnPrime);
+                        return simplifyMul(result);
+                    }
+                }
+            }
+
+            // Factorize denominator similarly if needed (for fractions)
+            if (den > Intg(1)) {
+                // TODO: 
+                // ln(num/den) = ln(num) - ln(den)
+                // Only do this if both are simple
+            }
+        }
+
         // ln(x^a) = a*ln(x) — generalized: remove isPositive restriction
         if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
             Exptree* a = SimpUtil::deepCopy(arg->child[1]);
