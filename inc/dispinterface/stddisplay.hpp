@@ -1,4 +1,4 @@
-/** @file /inc/display.hpp
+/** @file /inc/dispinterface/stddisplay.hpp
  *  @brief Display initialization and control for the calculator project
  *  @author hdkghc
  *  @version 0.1
