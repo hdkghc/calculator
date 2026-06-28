@@ -185,6 +185,67 @@ namespace CAS {
             }
             return false;
         }
+        
+        // ========== Vector/Matrix helpers ==========
+
+        /**
+         *  @brief Check if a node is a vector: vector(n, a1, ..., an)
+         */
+        inline bool isVectorNode(Exptree* node) {
+            return isFunction(node, FuncName::vector) && node->child.size() >= 1;
+        }
+
+        /**
+         *  @brief Get the number of elements in a vector
+         */
+        inline size_t vectorElemCount(Exptree* vec) {
+            if (!isVectorNode(vec) || vec->child.size() < 1) return 0;
+            return vec->child.size() - 1;
+        }
+
+        /**
+         *  @brief Get pointer to the i-th element (0-indexed) of a vector
+         */
+        inline Exptree* vectorElem(Exptree* vec, size_t i) {
+            if (i + 1 < vec->child.size()) return vec->child[i + 1];
+            return nullptr;
+        }
+
+        /**
+         *  @brief Check if a node is a matrix: matrix(m, n, a11, ..., amn)
+         */
+        inline bool isMatrixNode(Exptree* node) {
+            return isFunction(node, FuncName::matrix) && node->child.size() >= 2;
+        }
+
+        /**
+         *  @brief Get matrix dimensions
+         *  @return true if dimensions are valid rational integers
+         */
+        inline bool matrixDims(Exptree* mat, size_t& m, size_t& n) {
+            if (!isMatrixNode(mat) || mat->child.size() < 2) return false;
+            if (!isInteger(mat->child[0]) || !isInteger(mat->child[1])) return false;
+
+            Intg mVal = mat->child[0]->value.numerator();
+            Intg nVal = mat->child[1]->value.numerator();
+
+            if (mVal < Intg(0) || nVal < Intg(0)) return false;
+
+            m = static_cast<size_t>(mVal.toInt());
+            n = static_cast<size_t>(nVal.toInt());
+
+            if (mat->child.size() != 2 + m * n) return false;
+            return true;
+        }
+
+        /**
+         *  @brief Get pointer to element (i,j) of a matrix
+         */
+        inline Exptree* matrixElem(Exptree* mat, size_t i, size_t j, size_t n) {
+            size_t idx = 2 + i * n + j;
+            if (idx < mat->child.size()) return mat->child[idx];
+            return nullptr;
+        }
 
     } // namespace SimpUtil
 

@@ -37,40 +37,80 @@ namespace CAS {
         const std::string& func = node->var;
 
         // Arithmetic
-        if (func == "+") return simplifyAdd(node);
-        if (func == "*") return simplifyMul(node);
-        if (func == "^") return simplifyPow(node);
+        if (func == "+")                    return simplifyAdd(node);
+        if (func == "*")                    return simplifyMul(node);
+        if (func == "^")                    return simplifyPow(node);
 
         // Trigonometric
-        if (func == FuncName::sin)   return simplifySin(node);
-        if (func == FuncName::cos)   return simplifyCos(node);
-        if (func == FuncName::tan)   return simplifyTan(node);
-        if (func == FuncName::asin)  return simplifyAsin(node);
-        if (func == FuncName::acos)  return simplifyAcos(node);
-        if (func == FuncName::atan)  return simplifyAtan(node);
+        if (func == FuncName::sin)          return simplifySin(node);
+        if (func == FuncName::cos)          return simplifyCos(node);
+        if (func == FuncName::tan)          return simplifyTan(node);
+        if (func == FuncName::asin)         return simplifyAsin(node);
+        if (func == FuncName::acos)         return simplifyAcos(node);
+        if (func == FuncName::atan)         return simplifyAtan(node);
 
-        // Hyperbolic (now converted to exponential form in preTransform,
-        // but we keep the handlers for cases where preTransform wasn't applied)
-        if (func == FuncName::sinh)  return simplifySinh(node);
-        if (func == FuncName::cosh)  return simplifyCosh(node);
-        if (func == FuncName::tanh)  return simplifyTanh(node);
-        if (func == FuncName::asinh) return simplifyAsinh(node);
-        if (func == FuncName::acosh) return simplifyAcosh(node);
-        if (func == FuncName::atanh) return simplifyAtanh(node);
+        // Hyperbolic
+        if (func == FuncName::sinh)         return simplifySinh(node);
+        if (func == FuncName::cosh)         return simplifyCosh(node);
+        if (func == FuncName::tanh)         return simplifyTanh(node);
+        if (func == FuncName::asinh)        return simplifyAsinh(node);
+        if (func == FuncName::acosh)        return simplifyAcosh(node);
+        if (func == FuncName::atanh)        return simplifyAtanh(node);
 
         // Logarithmic
-        if (func == FuncName::ln)    return simplifyLn(node);
-        if (func == FuncName::log)   return simplifyLog(node);
-        if (func == FuncName::log10) return simplifyLog10(node);
+        if (func == FuncName::ln)           return simplifyLn(node);
+        if (func == FuncName::log)          return simplifyLog(node);
+        if (func == FuncName::log10)        return simplifyLog10(node);
 
         // Other elementary functions
-        if (func == FuncName::abs)   return simplifyAbs(node);
-        if (func == FuncName::sign)  return simplifySignum(node);
-        if (func == FuncName::fact)  return simplifyFact(node);
+        if (func == FuncName::abs)          return simplifyAbs(node);
+        if (func == FuncName::sign)         return simplifySignum(node);
+        if (func == FuncName::fact)         return simplifyFact(node);
 
-        // Angle conversion functions (if not pre-transformed)
-        if (func == FuncName::deg)   return simplifyDeg(node);
-        if (func == FuncName::rad)   return simplifyRad(node);
+        // Angle conversion
+        if (func == FuncName::deg)          return simplifyDeg(node);
+        if (func == FuncName::rad)          return simplifyRad(node);
+
+        // Complex number functions
+        if (func == FuncName::realpart)     return simplifyRealpart(node);
+        if (func == FuncName::imagpart)     return simplifyImagpart(node);
+        if (func == FuncName::conjg)        return simplifyConjg(node);
+        if (func == FuncName::arg)          return simplifyArg(node);
+
+        // Number theory
+        if (func == FuncName::mod)          return simplifyMod(node);
+        if (func == FuncName::gcd)          return simplifyGcd(node);
+        if (func == FuncName::lcm)          return simplifyLcm(node);
+
+        // Rounding
+        if (func == FuncName::floor)        return simplifyFloor(node);
+        if (func == FuncName::ceil)         return simplifyCeil(node);
+        if (func == FuncName::frac)         return simplifyFrac(node);
+        if (func == FuncName::round)        return simplifyRound(node);
+
+        // Combinatorics
+        if (func == FuncName::permut)       return simplifyPermut(node);
+        if (func == FuncName::combin)       return simplifyCombin(node);
+
+        // Coordinate transformation
+        if (func == FuncName::polar)        return simplifyPolar(node);
+        if (func == FuncName::rect)         return simplifyRect(node);
+
+        // Min/Max
+        if (func == FuncName::max)          return simplifyMax(node);
+        if (func == FuncName::min)          return simplifyMin(node);
+
+        // Random (pass-through)
+        if (func == FuncName::randrat)      return simplifyRandrat(node);
+        if (func == FuncName::randint)      return simplifyRandint(node);
+
+        // Vector/Matrix
+        if (func == FuncName::vector)       return simplifyVector(node);
+        if (func == FuncName::matrix)       return simplifyMatrix(node);
+        if (func == FuncName::dot)          return simplifyDot(node);
+        if (func == FuncName::angle)        return simplifyAngle(node);
+        if (func == FuncName::det)          return simplifyDet(node);
+        if (func == FuncName::transpose)    return simplifyTranspose(node);
 
         return node;
     }

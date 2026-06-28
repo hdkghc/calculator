@@ -167,7 +167,19 @@ namespace CAS {
         return result;
     }
 
-    Exptree* TreeSimplifier::simplifyAdd(Exptree* node) {
+        Exptree* TreeSimplifier::simplifyAdd(Exptree* node) {
+        // Check if all children are vectors or all are matrices
+        if (node->child.size() > 0) {
+            bool allVec = true, allMat = true;
+            for (size_t i = 0; i < node->child.size(); ++i) {
+                if (!SimpUtil::isVectorNode(node->child[i])) allVec = false;
+                if (!SimpUtil::isMatrixNode(node->child[i])) allMat = false;
+            }
+            if (allVec || allMat) {
+                return simplifyAddVM(node);
+            }
+        }
+
         addBuf_.resetAdd();
         collectAddTerms(node, addBuf_);
         mergeAddTerms(addBuf_);
@@ -309,6 +321,28 @@ namespace CAS {
     }
 
     Exptree* TreeSimplifier::simplifyMul(Exptree* node) {
+        // Check for vector/matrix multiplication
+        // 2 : matrix*matrix, vector*vector
+        if (node->child.size() == 2) {
+            Exptree* a = node->child[0];
+            Exptree* b = node->child[1];
+            if ((SimpUtil::isVectorNode(a) || SimpUtil::isMatrixNode(a)) &&
+                (SimpUtil::isVectorNode(b) || SimpUtil::isMatrixNode(b))) {
+                return simplifyMulVM(node);
+            }
+        }
+        // scalar * vector/matrix
+        bool hasVM = false;
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (SimpUtil::isVectorNode(node->child[i]) || SimpUtil::isMatrixNode(node->child[i])) {
+                hasVM = true;
+                break;
+            }
+        }
+        if (hasVM) {
+            return simplifyMulVM(node);
+        }
+
         mulBuf_.resetMul();
         collectMulFactors(node, mulBuf_);
         mergeMulFactors(mulBuf_);

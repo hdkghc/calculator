@@ -703,6 +703,15 @@ namespace CAS {
                 }
                 return g0;
             }
+            /** @name toInt
+             *  @brief Turn the integer into int64 (precision loss)
+             */
+            int64_t toInt() {
+                int64_t ret = 0;
+                for(size_t i = gl() + 1; i >= 1; i--) {
+                    ret = ret * 10 + (*this)[i - 1];
+                }
+            }
     }; // class Intg
 } // namespace CAS
 

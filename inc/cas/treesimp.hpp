@@ -274,6 +274,178 @@ namespace CAS {
          */
         Exptree* simplifyRad(Exptree* node);
 
+        // ========== Complex number simplifiers ==========
+
+        /**
+         *  @name simplifyRealpart
+         *  @brief Extract real part: re(a + b*i) = a, re(x) = x for real x
+         */
+        Exptree* simplifyRealpart(Exptree* node);
+        /**
+         *  @name simplifyImagpart
+         *  @brief Extract imaginary coefficient: im(a + b*i) = b, im(x) = 0
+         */
+        Exptree* simplifyImagpart(Exptree* node);
+        /**
+         *  @name simplifyConjg
+         *  @brief Complex conjugate: conj(a + b*i) = a - b*i, conj(x) = x
+         */
+        Exptree* simplifyConjg(Exptree* node);
+        /**
+         *  @name simplifyArg
+         *  @brief Complex argument: arg(a + b*i) = atan(b/a)
+         */
+        Exptree* simplifyArg(Exptree* node);
+
+        // ========== Number theory / Integer simplifiers ==========
+
+        /**
+         *  @name simplifyMod
+         *  @brief Modulo: mod(a, b) = a % b for integers
+         */
+        Exptree* simplifyMod(Exptree* node);
+        /**
+         *  @name simplifyGcd
+         *  @brief GCD: gcd(a, b) for integers
+         */
+        Exptree* simplifyGcd(Exptree* node);
+        /**
+         *  @name simplifyLcm
+         *  @brief LCM: lcm(a, b) = a*b/gcd(a,b) for integers
+         */
+        Exptree* simplifyLcm(Exptree* node);
+
+        // ========== Rounding simplifiers ==========
+
+        /**
+         *  @name simplifyFloor
+         *  @brief Floor: floor(n) = n for integers, floor(p/q) for rationals
+         */
+        Exptree* simplifyFloor(Exptree* node);
+        /**
+         *  @name simplifyCeil
+         *  @brief Ceil: ceil(n) = n for integers, ceil(p/q) for rationals
+         */
+        Exptree* simplifyCeil(Exptree* node);
+        /**
+         *  @name simplifyFrac
+         *  @brief Fractional part: frac(n) = 0 for integers
+         */
+        Exptree* simplifyFrac(Exptree* node);
+        /**
+         *  @name simplifyRound
+         *  @brief Round to nearest integer: round(n) = n for integers
+         */
+        Exptree* simplifyRound(Exptree* node);
+
+        // ========== Combinatorics simplifiers ==========
+
+        /**
+         *  @name simplifyPermut
+         *  @brief Permutations: P(n, k) = n!/(n-k)! for small integers
+         */
+        Exptree* simplifyPermut(Exptree* node);
+        /**
+         *  @name simplifyCombin
+         *  @brief Combinations: C(n, k) = n!/(k!*(n-k)!) for small integers
+         */
+        Exptree* simplifyCombin(Exptree* node);
+
+        // ========== Coordinate transformation simplifiers ==========
+
+        /**
+         *  @name simplifyPolar
+         *  @brief Rectangular to polar: polar(x, y) -> (r, theta)
+         *  @details Returns sqrt(x^2+y^2) for r, atan(y/x) for theta
+         *           Currently returns r only (magnitude)
+         */
+        Exptree* simplifyPolar(Exptree* node);
+        /**
+         *  @name simplifyRect
+         *  @brief Polar to rectangular: rect(r, theta) -> (x, y)
+         *  @details Returns r*cos(theta) for x, r*sin(theta) for y
+         *           Currently returns a 2-element vector if possible
+         */
+        Exptree* simplifyRect(Exptree* node);
+
+        // ========== Min/Max simplifiers ==========
+
+        /**
+         *  @name simplifyMax
+         *  @brief Maximum of two values
+         */
+        Exptree* simplifyMax(Exptree* node);
+        /**
+         *  @name simplifyMin
+         *  @brief Minimum of two values
+         */
+        Exptree* simplifyMin(Exptree* node);
+
+        // ========== Random functions (pass-through, no simplification) ==========
+
+        /**
+         *  @name simplifyRandrat
+         *  @brief Random rational: no simplification, pass through
+         */
+        Exptree* simplifyRandrat(Exptree* node);
+        /**
+         *  @name simplifyRandint
+         *  @brief Random integer: no simplification, pass through
+         */
+        Exptree* simplifyRandint(Exptree* node);
+
+        // ========== Vector/Matrix simplifiers ==========
+
+        /**
+         *  @name simplifyVector
+         *  @brief Simplify vector: vector(n, a1, ..., an)
+         *  @details Children already simplified, no further action needed
+         */
+        Exptree* simplifyVector(Exptree* node);
+        /**
+         *  @name simplifyDot
+         *  @brief Dot product: dot(vector(m,...), vector(m,...)) -> sum
+         */
+        Exptree* simplifyDot(Exptree* node);
+        /**
+         *  @name simplifyAngle
+         *  @brief Angle between vectors: acos(dot(a,b)/(|a|*|b|))
+         */
+        Exptree* simplifyAngle(Exptree* node);
+        /**
+         *  @name simplifyDet
+         *  @brief Determinant of square matrix: det(matrix(n,n,...))
+         *  @details Computes for 1x1, 2x2, 3x3 rational matrices
+         */
+        Exptree* simplifyDet(Exptree* node);
+        /**
+         *  @name simplifyMatrix
+         *  @brief Simplify matrix: matrix(m, n, a11, ..., amn)
+         *  @details Children already simplified, no further action needed
+         */
+        Exptree* simplifyMatrix(Exptree* node);
+        /**
+         *  @name simplifyTranspose
+         *  @brief Transpose: transpose(matrix(m,n,...)) -> matrix(n,m,...)
+         *  @details Swaps rows and columns
+         */
+        Exptree* simplifyTranspose(Exptree* node);
+        
+        // ========== Vector/Matrix arithmetic ==========
+
+        /**
+         *  @name simplifyAddVM
+         *  @brief Element-wise addition for vectors/matrices
+         */
+        Exptree* simplifyAddVM(Exptree* node);
+        /**
+         *  @name simplifyMulVM
+         *  @brief Multiplication for vectors/matrices:
+         *         matrix * matrix (矩阵乘法), vector * vector (点积/叉积),
+         *         scalar * vector/matrix (数乘)
+         */
+        Exptree* simplifyMulVM(Exptree* node);
+
         // ========== Internal helper methods ==========
 
         /**
@@ -339,6 +511,19 @@ namespace CAS {
          *  @brief Bubble sort expression pointers by canonical order
          */
         void sortItems(Exptree** items, size_t count);
+        // ========== Complex helper ==========
+
+        /**
+         *  @name splitComplexSum
+         *  @brief Split a sum into real and imaginary parts
+         *  @param simp Reference to simplifier instance
+         *  @param node Sum node to split
+         *  @param realPart Output: simplified real part
+         *  @param imagPart Output: simplified imaginary coefficient
+         *  @return true if any imaginary terms found
+         */
+        static bool splitComplexSum(TreeSimplifier& simp, Exptree* node,
+                                     Exptree*& realPart, Exptree*& imagPart);
     };
 
 } // namespace CAS
