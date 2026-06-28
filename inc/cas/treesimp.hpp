@@ -23,7 +23,6 @@
 
 #include "cas/exptree.hpp"
 #include "cas/expdef.hpp"
-#include <algorithm>
 #include <cstring>
 
 namespace CAS {
@@ -327,7 +326,19 @@ namespace CAS {
          *  // ((+) ((*) 3 x) -2)
          *  @endcode
          */
-        static Exptree* simplify(Exptree*& root);
+        static Exptree* simplify(Exptree*& root) {
+            if (!root) return nullptr;
+            
+            TreeSimplifier& simp = instance();
+            
+            // Step 1: Preprocessing normalization
+            simp.preTransform(root);
+            
+            // Step 2: Bottom-up recursive simplification
+            root = simp.simplifyNode(root);
+            
+            return root;
+        }
 
     private:
         TreeSimplifier() = default;
@@ -388,6 +399,19 @@ namespace CAS {
                 if (count >= MAX_ITEMS) return false;
                 items[count++] = item;
                 return true;
+            }
+            
+            /** @name clearItems
+             *  @brief Free all items in the buffer and reset count
+             */
+            void clearItems() {
+                for (size_t i = 0; i < count; ++i) {
+                    if (items[i]) {
+                        SimpUtil::freeTree(items[i]);
+                        items[i] = nullptr;
+                    }
+                }
+                count = 0;
             }
         };
 
@@ -600,7 +624,7 @@ namespace CAS {
          *  @details Uses Intg::sqrt on numerator and denominator separately,
          *           then verifies by squaring the result.
          */
-        bool isPerfectSquare(const Rational& r, Rational& root);
+        bool isPerfectSquare(Rational r, Rational& root);
         /** @name simplifyEulerForm
          *  @brief Apply Euler's formula to e^(i*theta)
          *  @param expArg The exponent argument, should be a product containing i
@@ -1094,15 +1118,25 @@ namespace CAS {
         // Handle k*pi patterns
         if (SimpUtil::isFunction(arg, "*")) {
             bool hasPi = false;
-            Rational coeff(Intg(0));
+            bool hasCoeff = false;
+            Rational coeff(Intg(1));
             
             for (size_t i = 0; i < arg->child.size(); ++i) {
                 if (SimpUtil::isConstantPi(arg->child[i])) {
                     hasPi = true;
                 } else if (SimpUtil::isRational(arg->child[i])) {
-                    coeff = coeff + arg->child[i]->value; // Simplified: multiply fractions
+                    if (hasCoeff) {
+                        // Multiple rational coefficients: multiply them
+                        coeff = coeff * arg->child[i]->value;
+                    } else {
+                        coeff = arg->child[i]->value;
+                        hasCoeff = true;
+                    }
                 }
             }
+            
+            // If no explicit coefficient was found, the coefficient is implicitly 1
+            // (already set to 1 above)
             
             if (hasPi && coeff > Rational(Intg(0))) {
                 // Normalize coefficient to [0, 2]
@@ -1111,10 +1145,11 @@ namespace CAS {
                 bool isCos = (std::strcmp(funcName, "cos") == 0);
                 bool isTan = (std::strcmp(funcName, "tan") == 0);
                 
-                // sin(pi/2) = 1, cos(pi/2) = 0
+                // sin(pi/2) = 1, cos(pi/2) = 0, tan(pi/2) = undefined
                 if (coeff == Rational(Intg(1), Intg(2))) {
                     if (isSin) return SimpUtil::makeRational(Rational(Intg(1)));
-                    if (isCos || isTan) return SimpUtil::makeRational(Rational(Intg(0)));
+                    if (isCos) return SimpUtil::makeRational(Rational(Intg(0)));
+                    // tan(pi/2) is undefined, leave as-is
                 }
                 // sin(pi/3) = sqrt(3)/2, cos(pi/3) = 1/2, tan(pi/3) = sqrt(3)
                 if (coeff == Rational(Intg(1), Intg(3))) {
@@ -1560,11 +1595,13 @@ namespace CAS {
                     coeff_i = coeff_i + coeff_j;
                     SimpUtil::freeTree(buf.items[j]);
                     buf.items[j] = nullptr;
-                    if (base_j != term_j->child[1]) {
+                    // Only free base_j if it was newly allocated (not original child)
+                    if (base_j != term_j->child[1] && base_j != term_j) {
                         SimpUtil::freeTree(base_j);
                     }
                 } else {
-                    if (base_j != term_j->child[1]) {
+                    // Only free base_j if it was newly allocated (not original child)
+                    if (base_j != term_j->child[1] && base_j != term_j) {
                         SimpUtil::freeTree(base_j);
                     }
                 }
@@ -1572,13 +1609,20 @@ namespace CAS {
 
             // Rebuild term with merged coefficient
             if (coeff_i.isZero()) {
+                // Free the entire term
                 SimpUtil::freeTree(buf.items[i]);
                 buf.items[i] = nullptr;
+                // base_i might be newly allocated, free it if needed
+                if (base_i != term_i->child[1] && base_i != term_i) {
+                    SimpUtil::freeTree(base_i);
+                }
             } else if (coeff_i == Rational(Intg(1))) {
                 if (base_i != term_i->child[1]) {
+                    // We created a new base_i, replace the original term with it
                     SimpUtil::freeTree(buf.items[i]);
                     buf.items[i] = base_i;
                 }
+                // If base_i == term_i->child[1], the original term is fine as-is
             } else {
                 Exptree* newTerm = SimpUtil::makeFunction("*");
                 newTerm->child.push_back(SimpUtil::makeRational(coeff_i));
@@ -1620,6 +1664,7 @@ namespace CAS {
     Exptree* TreeSimplifier::rebuildAdd(WorkBuffer& buf) {
         if (!buf.constantAccum.isZero()) {
             if (!buf.addItem(SimpUtil::makeRational(buf.constantAccum))) {
+                // Buffer full, but at least return the constant
                 return SimpUtil::makeRational(buf.constantAccum);
             }
         }
@@ -1813,10 +1858,10 @@ namespace CAS {
         return nullptr;
     }
 
-    bool TreeSimplifier::isPerfectSquare(const Rational& r, Rational& root) {
-        if (const_cast<Rational&>(r) < Rational(Intg(0))) return false;
+    bool TreeSimplifier::isPerfectSquare(Rational r, Rational& root) {
+        if (r < Rational(Intg(0))) return false;
 
-        Intg num = const_cast<Rational&>(r).numerator();
+        Intg num = r.numerator();
         Intg den = r.den;
 
         Intg sqrtNum = num.sqrt(num);
@@ -2465,10 +2510,8 @@ namespace CAS {
             Intg n = arg->value.numerator();
             if (n <= Intg(20)) {
                 Intg result(1);
-                Intg i(2);
-                while (i <= n) {
+                for (Intg i(2); i <= n; i = i + Intg(1)) {
                     result = result * i;
-                    i = i + Intg(1);
                 }
                 SimpUtil::freeTree(node);
                 return SimpUtil::makeRational(Rational(result));
