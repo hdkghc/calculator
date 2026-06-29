@@ -191,6 +191,15 @@ namespace CAS {
         const char *const Kj90      = "\002\071"; ///< Josephson constant
         const char *const t         = "\002\072"; ///< standard temperature
     } // namespace ConstName
+    namespace KeywordName {
+        const char *const If        = "if";
+        const char *const While     = "while";
+        const char *const For       = "for";
+        const char *const Do        = "do";
+        const char *const Return    = "return";
+        const char *const Func      = "func";
+        const char *const Call      = "call";
+    }
 } // namespace CAS
 
 #endif // _CAS_EXPDEF_HPP_
