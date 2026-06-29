@@ -39,7 +39,7 @@ compile_file() {
     local src="$1"
     local exe="$BIN_DIR/$(basename "${src%.cpp}")"
     echo "Compiling $src -> $exe"
-    g++ -std=c++17 -O2 -Wall -Wextra \
+    g++ -std=c++17 -O0 -g -Wall -Wextra \
         -I"$ROOT_DIR/inc" \
         -I"$TEST_DIR" \
         "$src" \

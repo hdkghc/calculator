@@ -95,16 +95,98 @@ namespace CAS {
                 }
 
                 if (SimpUtil::compareNodes(base_i, base_j) == 0) {
+                    // Same base: add coefficients
                     coeff_i = coeff_i + coeff_j;
                     SimpUtil::freeTree(buf.items[j]);
                     buf.items[j] = nullptr;
                     if (base_j_owned) {
                         SimpUtil::freeTree(base_j);
                     }
-                } else {
-                    if (base_j_owned) {
-                        SimpUtil::freeTree(base_j);
+                } else if (SimpUtil::isFunction(base_i, "^") && base_i->child.size() == 2 &&
+                           SimpUtil::isFunction(base_j, "^") && base_j->child.size() == 2 &&
+                           SimpUtil::isRational(base_i->child[1]) && SimpUtil::isRational(base_j->child[1])) {
+
+                    Exptree* powBase_i = base_i->child[0];
+                    Exptree* powBase_j = base_j->child[0];
+
+                    if (SimpUtil::compareNodes(powBase_i, powBase_j) == 0) {
+                        Rational exp_i = base_i->child[1]->value;
+                        Rational exp_j = base_j->child[1]->value;
+
+                        // base^exp_i + base^exp_j = base^minExp * (base^(exp_i-minExp) + base^(exp_j-minExp))
+                        Rational minExp = (exp_i < exp_j) ? exp_i : exp_j;
+                        Rational diff_i = exp_i - minExp;
+                        Rational diff_j = exp_j - minExp;
+
+                        // Build inner sum without calling simplifyAdd (avoids addBuf_ reentrancy)
+                        Exptree* sum = SimpUtil::makeFunction("+");
+
+                        // Term from i
+                        if (diff_i.isZero()) {
+                            sum->child.push_back(SimpUtil::makeRational(coeff_i));
+                        } else {
+                            Exptree* pow_i = SimpUtil::makeFunction("^");
+                            pow_i->child.push_back(SimpUtil::deepCopy(powBase_i));
+                            pow_i->child.push_back(SimpUtil::makeRational(diff_i));
+                            if (coeff_i == Rational(Intg(1))) {
+                                sum->child.push_back(pow_i);
+                            } else {
+                                Exptree* term = SimpUtil::makeFunction("*");
+                                term->child.push_back(SimpUtil::makeRational(coeff_i));
+                                term->child.push_back(pow_i);
+                                sum->child.push_back(term);
+                            }
+                        }
+
+                        // Term from j
+                        if (diff_j.isZero()) {
+                            sum->child.push_back(SimpUtil::makeRational(coeff_j));
+                        } else {
+                            Exptree* pow_j = SimpUtil::makeFunction("^");
+                            pow_j->child.push_back(SimpUtil::deepCopy(powBase_i));
+                            pow_j->child.push_back(SimpUtil::makeRational(diff_j));
+                            if (coeff_j == Rational(Intg(1))) {
+                                sum->child.push_back(pow_j);
+                            } else {
+                                Exptree* term = SimpUtil::makeFunction("*");
+                                term->child.push_back(SimpUtil::makeRational(coeff_j));
+                                term->child.push_back(pow_j);
+                                sum->child.push_back(term);
+                            }
+                        }
+
+                        Exptree* newTerm;
+                        if (minExp.isZero()) {
+                            newTerm = sum;
+                        } else {
+                            // factor = base^minExp
+                            Exptree* factor = SimpUtil::makeFunction("^");
+                            factor->child.push_back(SimpUtil::deepCopy(powBase_i));
+                            factor->child.push_back(SimpUtil::makeRational(minExp));
+                            // newTerm = factor * sum
+                            newTerm = SimpUtil::makeFunction("*");
+                            newTerm->child.push_back(factor);
+                            newTerm->child.push_back(sum);
+                        }
+
+                        if (term_i != base_i) {
+                            term_i->child.clear();
+                        }
+                        if (term_j != base_j) {
+                            term_j->child.clear();
+                        }
+                        SimpUtil::freeTree(buf.items[i]);
+                        SimpUtil::freeTree(buf.items[j]);
+                        buf.items[i] = newTerm;
+                        buf.items[j] = nullptr;
+
+                        coeff_i = Rational(Intg(1));
+                        base_i = newTerm;
+                        base_i_owned = false;
                     }
+                }
+                if (base_j_owned) {
+                    SimpUtil::freeTree(base_j);
                 }
             }
 
@@ -120,7 +202,6 @@ namespace CAS {
                     SimpUtil::freeTree(buf.items[i]);
                     buf.items[i] = base_i;
                 }
-                // else: base_i == term_i == buf.items[i], already correct
             } else {
                 Exptree* newTerm = SimpUtil::makeFunction("*");
                 newTerm->child.push_back(SimpUtil::makeRational(coeff_i));
@@ -134,7 +215,7 @@ namespace CAS {
             }
         }
 
-        // Compact array (remove null entries)
+        // Compact array
         size_t writeIdx = 0;
         for (size_t i = 0; i < buf.count; ++i) {
             if (buf.items[i]) {

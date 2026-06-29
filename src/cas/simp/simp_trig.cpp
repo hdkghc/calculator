@@ -65,154 +65,176 @@ namespace CAS {
                 }
             }
 
-            if (hasPi && coeff > Rational(Intg(0))) {
+            if (hasPi) {
                 bool isSin = (std::strcmp(funcName, "sin") == 0);
                 bool isCos = (std::strcmp(funcName, "cos") == 0);
                 bool isTan = (std::strcmp(funcName, "tan") == 0);
 
-                // Normalize coefficient
-                Intg k = coeff.numerator();
-                Intg d = coeff.den;
-
-                if (isTan) {
-                    // tan period is pi, normalize to [0, 1)
-                    k = k % d;
-                    if (k < Intg(0)) k = k + d;
-                    coeff = Rational(k, d);
-                } else {
-                    // sin/cos period is 2*pi, normalize to [0, 2)
-                    Intg twoD = Intg(2) * d;
-                    k = k % twoD;
-                    if (k < Intg(0)) k = k + twoD;
-                    coeff = Rational(k, d);
-                }
-
-                // coeff == 0
-                if (coeff.isZero()) {
-                    if (isSin || isTan) return SimpUtil::makeRational(Rational(Intg(0)));
-                    if (isCos) return SimpUtil::makeRational(Rational(Intg(1)));
-                }
-
-                bool negate = false;
-
-                if (isTan) {
-                    // tan period is pi, coeff in [0, 1)
-                    if (coeff > Rational(Intg(1), Intg(2))) {
-                        // tan(pi-x) = -tan(x) for x in (0, pi/2)
-                        negate = true;
-                        coeff = Rational(Intg(1)) - coeff;
-                    }
-                } else {
-                    // sin/cos period is 2*pi, coeff in [0, 2)
-                    if (coeff > Rational(Intg(1))) {
-                        // [1, 2): sin(pi+x)=-sin(x), cos(pi+x)=-cos(x)
-                        if (isSin || isCos) negate = true;
-                        coeff = coeff - Rational(Intg(1));
-                    }
-                    if (coeff > Rational(Intg(1), Intg(2))) {
-                        // (1/2, 1): sin(pi-x)=sin(x), cos(pi-x)=-cos(x)
-                        if (isCos) negate = !negate;
-                        coeff = Rational(Intg(1)) - coeff;
-                    }
-                }
-
-                // Now coeff is in [0, 1/2]
-                Exptree* result = nullptr;
-
-                if (coeff.isZero()) {
-                    if (isSin || isTan) result = SimpUtil::makeRational(Rational(Intg(0)));
-                    if (isCos) result = SimpUtil::makeRational(Rational(Intg(1)));
-                }
-                // sin(pi/2) = 1, cos(pi/2) = 0, tan(pi/2) = undefined
-                else if (coeff == Rational(Intg(1), Intg(2))) {
-                    if (isSin) result = SimpUtil::makeRational(Rational(Intg(1)));
-                    if (isCos) result = SimpUtil::makeRational(Rational(Intg(0)));
-                }
-                // sin(pi/3) = sqrt(3)/2, cos(pi/3) = 1/2, tan(pi/3) = sqrt(3)
-                else if (coeff == Rational(Intg(1), Intg(3))) {
-                    if (isSin) {
-                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(sqrt3);
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    }
-                    if (isCos) result = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
-                    if (isTan) {
-                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                        result = sqrt3;
-                    }
-                }
-                // sin(pi/4) = cos(pi/4) = sqrt(2)/2, tan(pi/4) = 1
-                else if (coeff == Rational(Intg(1), Intg(4))) {
-                    if (isSin || isCos) {
-                        Exptree* sqrt2 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(sqrt2);
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
-                    }
-                    if (isTan) result = SimpUtil::makeRational(Rational(Intg(1)));
-                }
-                // sin(pi/6) = 1/2, cos(pi/6) = sqrt(3)/2, tan(pi/6) = 1/sqrt(3)
-                else if (coeff == Rational(Intg(1), Intg(6))) {
-                    if (isSin) result = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                // Handle negative coefficient using odd/even properties
+                bool negateResult = false;
+                if (coeff < Rational(Intg(0))) {
                     if (isCos) {
-                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(sqrt3);
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        // cos(-x) = cos(x)
+                        coeff = Rational(Intg(0)) - coeff;
+                    } else if (isSin || isTan) {
+                        // sin(-x) = -sin(x), tan(-x) = -tan(x)
+                        negateResult = true;
+                        coeff = Rational(Intg(0)) - coeff;
                     }
+                }
+
+                if (coeff > Rational(Intg(0))) {
+                    // Normalize coefficient
+                    Intg k = coeff.numerator();
+                    Intg d = coeff.den;
+
                     if (isTan) {
-                        Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
-                        result->child.push_back(sqrt3);
+                        k = k % d;
+                        if (k < Intg(0)) k = k + d;
+                        coeff = Rational(k, d);
+                    } else {
+                        Intg twoD = Intg(2) * d;
+                        k = k % twoD;
+                        if (k < Intg(0)) k = k + twoD;
+                        coeff = Rational(k, d);
                     }
-                }
-                // cos(pi/5) = (sqrt(5)+1)/4
-                else if (coeff == Rational(Intg(1), Intg(5))) {
-                    if (isCos) {
-                        Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
-                        Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
-                        Exptree* sum = SimpUtil::makeFunction("+");
-                        sum->child.push_back(sqrt5);
-                        sum->child.push_back(one);
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(sum);
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
-                    }
-                }
-                // sin(pi/10) = (sqrt(5)-1)/4
-                else if (coeff == Rational(Intg(1), Intg(10))) {
-                    if (isSin) {
-                        Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
-                        sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
-                        Exptree* negOne = SimpUtil::makeFunction("*");
-                        negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-                        negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
-                        Exptree* sum = SimpUtil::makeFunction("+");
-                        sum->child.push_back(sqrt5);
-                        sum->child.push_back(negOne);
-                        result = SimpUtil::makeFunction("/");
-                        result->child.push_back(sum);
-                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
-                    }
-                }
 
-                // Apply negation if needed
-                if (result && negate) {
-                    Exptree* negResult = SimpUtil::makeFunction("*");
-                    negResult->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-                    negResult->child.push_back(result);
-                    return negResult;
-                }
+                    if (coeff.isZero()) {
+                        if (isSin || isTan) {
+                            Exptree* r = SimpUtil::makeRational(Rational(Intg(0)));
+                            if (negateResult) {
+                                Exptree* neg = SimpUtil::makeFunction("*");
+                                neg->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                                neg->child.push_back(r);
+                                return neg;
+                            }
+                            return r;
+                        }
+                        if (isCos) {
+                            Exptree* r = SimpUtil::makeRational(Rational(Intg(1)));
+                            if (negateResult) {
+                                Exptree* neg = SimpUtil::makeFunction("*");
+                                neg->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                                neg->child.push_back(r);
+                                return neg;
+                            }
+                            return r;
+                        }
+                    }
 
-                return result;
+                    bool negate = false;
+
+                    if (isTan) {
+                        if (coeff > Rational(Intg(1), Intg(2))) {
+                            negate = true;
+                            coeff = Rational(Intg(1)) - coeff;
+                        }
+                    } else {
+                        if (coeff > Rational(Intg(1))) {
+                            if (isSin || isCos) negate = true;
+                            coeff = coeff - Rational(Intg(1));
+                        }
+                        if (coeff > Rational(Intg(1), Intg(2))) {
+                            if (isCos) negate = !negate;
+                            coeff = Rational(Intg(1)) - coeff;
+                        }
+                    }
+
+                    // Combine negateResult with negate
+                    if (negateResult) negate = !negate;
+
+                    // Now coeff is in [0, 1/2]
+                    Exptree* result = nullptr;
+
+                    if (coeff.isZero()) {
+                        if (isSin || isTan) result = SimpUtil::makeRational(Rational(Intg(0)));
+                        if (isCos) result = SimpUtil::makeRational(Rational(Intg(1)));
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(2))) {
+                        if (isSin) result = SimpUtil::makeRational(Rational(Intg(1)));
+                        if (isCos) result = SimpUtil::makeRational(Rational(Intg(0)));
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(3))) {
+                        if (isSin) {
+                            Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(sqrt3);
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        }
+                        if (isCos) result = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                        if (isTan) {
+                            Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                            result = sqrt3;
+                        }
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(4))) {
+                        if (isSin || isCos) {
+                            Exptree* sqrt2 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(sqrt2);
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        }
+                        if (isTan) result = SimpUtil::makeRational(Rational(Intg(1)));
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(6))) {
+                        if (isSin) result = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
+                        if (isCos) {
+                            Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(sqrt3);
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                        }
+                        if (isTan) {
+                            Exptree* sqrt3 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt3->child.push_back(SimpUtil::makeRational(Rational(Intg(3))));
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                            result->child.push_back(sqrt3);
+                        }
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(5))) {
+                        if (isCos) {
+                            Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
+                            Exptree* one = SimpUtil::makeRational(Rational(Intg(1)));
+                            Exptree* sum = SimpUtil::makeFunction("+");
+                            sum->child.push_back(sqrt5);
+                            sum->child.push_back(one);
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(sum);
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
+                        }
+                    }
+                    else if (coeff == Rational(Intg(1), Intg(10))) {
+                        if (isSin) {
+                            Exptree* sqrt5 = SimpUtil::makeFunction(FuncName::sqrt);
+                            sqrt5->child.push_back(SimpUtil::makeRational(Rational(Intg(5))));
+                            Exptree* negOne = SimpUtil::makeFunction("*");
+                            negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                            negOne->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                            Exptree* sum = SimpUtil::makeFunction("+");
+                            sum->child.push_back(sqrt5);
+                            sum->child.push_back(negOne);
+                            result = SimpUtil::makeFunction("/");
+                            result->child.push_back(sum);
+                            result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
+                        }
+                    }
+
+                    // Apply negation
+                    if (result && negate) {
+                        Exptree* negResult = SimpUtil::makeFunction("*");
+                        negResult->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                        negResult->child.push_back(result);
+                        return negResult;
+                    }
+
+                    return result;
+                }
             }
         }
 
@@ -435,10 +457,14 @@ namespace CAS {
     Exptree* TreeSimplifier::simplifyAsin(Exptree* node) {
         if (node->child.size() != 1) return node;
         Exptree* arg = node->child[0];
+
+        // asin(0) = 0
         if (SimpUtil::isZero(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
+
+        // asin(1) = pi/2
         if (SimpUtil::isOne(arg)) {
             SimpUtil::freeTree(node);
             Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
@@ -447,6 +473,8 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
             return result;
         }
+
+        // asin(1/2) = pi/6
         if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
             SimpUtil::freeTree(node);
             Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
@@ -455,6 +483,28 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
             return result;
         }
+
+        // asin(-x) = -asin(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty() && SimpUtil::isMinusOne(arg->child[0])) {
+            Exptree* inner;
+            if (arg->child.size() == 2) {
+                inner = SimpUtil::deepCopy(arg->child[1]);
+            } else {
+                inner = SimpUtil::makeFunction("*");
+                for (size_t i = 1; i < arg->child.size(); ++i) {
+                    inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                }
+            }
+            Exptree* asinInner = SimpUtil::makeFunction(FuncName::asin);
+            asinInner->child.push_back(inner);
+            asinInner = simplifyAsin(asinInner);
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            result->child.push_back(asinInner);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         return node;
     }
 
@@ -463,6 +513,8 @@ namespace CAS {
     Exptree* TreeSimplifier::simplifyAcos(Exptree* node) {
         if (node->child.size() != 1) return node;
         Exptree* arg = node->child[0];
+
+        // acos(0) = pi/2
         if (SimpUtil::isZero(arg)) {
             SimpUtil::freeTree(node);
             Exptree* half = SimpUtil::makeRational(Rational(Intg(1), Intg(2)));
@@ -471,10 +523,14 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
             return result;
         }
+
+        // acos(1) = 0
         if (SimpUtil::isOne(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
+
+        // acos(1/2) = pi/3
         if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(2))) {
             SimpUtil::freeTree(node);
             Exptree* third = SimpUtil::makeRational(Rational(Intg(1), Intg(3)));
@@ -483,6 +539,35 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
             return result;
         }
+
+        // acos(-x) = pi - acos(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty() && SimpUtil::isMinusOne(arg->child[0])) {
+            Exptree* inner;
+            if (arg->child.size() == 2) {
+                inner = SimpUtil::deepCopy(arg->child[1]);
+            } else {
+                inner = SimpUtil::makeFunction("*");
+                for (size_t i = 1; i < arg->child.size(); ++i) {
+                    inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                }
+            }
+            Exptree* acosInner = SimpUtil::makeFunction(FuncName::acos);
+            acosInner->child.push_back(inner);
+            acosInner = simplifyAcos(acosInner);
+
+            // pi - acos(inner)
+            Exptree* negAcos = SimpUtil::makeFunction("*");
+            negAcos->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negAcos->child.push_back(acosInner);
+
+            Exptree* result = SimpUtil::makeFunction("+");
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            result->child.push_back(negAcos);
+
+            SimpUtil::freeTree(node);
+            return simplifyAdd(result);
+        }
+
         return node;
     }
 
@@ -518,6 +603,27 @@ namespace CAS {
             return result;
         }
 
+        // atan(-x) = -atan(x)
+        if (SimpUtil::isFunction(arg, "*") && !arg->child.empty() && SimpUtil::isMinusOne(arg->child[0])) {
+            Exptree* inner;
+            if (arg->child.size() == 2) {
+                inner = SimpUtil::deepCopy(arg->child[1]);
+            } else {
+                inner = SimpUtil::makeFunction("*");
+                for (size_t i = 1; i < arg->child.size(); ++i) {
+                    inner->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                }
+            }
+            Exptree* atanInner = SimpUtil::makeFunction(FuncName::atan);
+            atanInner->child.push_back(inner);
+            atanInner = simplifyAtan(atanInner);
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            result->child.push_back(atanInner);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         // atan(sqrt(3)) = pi/3
         if (SimpUtil::isFunction(arg, FuncName::sqrt) && arg->child.size() == 1) {
             if (SimpUtil::isRational(arg->child[0]) && arg->child[0]->value == Rational(Intg(3))) {
@@ -528,6 +634,18 @@ namespace CAS {
                 result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
                 return result;
             }
+        }
+
+        // atan(^(3,1/2)) = pi/3  (sqrt(3) after simplification)
+        if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2 &&
+            SimpUtil::isRational(arg->child[0]) && arg->child[0]->value == Rational(Intg(3)) &&
+            SimpUtil::isRational(arg->child[1]) && arg->child[1]->value == Rational(Intg(1), Intg(2))) {
+            SimpUtil::freeTree(node);
+            Exptree* third = SimpUtil::makeRational(Rational(Intg(1), Intg(3)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(third);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
         }
 
         // atan(-sqrt(3)) = -pi/3
@@ -562,11 +680,30 @@ namespace CAS {
             }
         }
 
-        // atan(^(3,-1/2)) = pi/6  (same as 1/sqrt(3) after simplification)
+        // atan(^(3,-1/2)) = pi/6
         if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
             if (SimpUtil::isRational(arg->child[0]) && arg->child[0]->value == Rational(Intg(3)) &&
-                SimpUtil::isRational(arg->child[1]) && 
+                SimpUtil::isRational(arg->child[1]) &&
                 arg->child[1]->value == Rational(Intg(-1), Intg(2))) {
+                SimpUtil::freeTree(node);
+                Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(sixth);
+                result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                return result;
+            }
+        }
+
+        // atan(sqrt(3)/3) = atan(1/sqrt(3)) = pi/6
+        if (SimpUtil::isFunction(arg, "*") && arg->child.size() == 2) {
+            Exptree* a = arg->child[0];
+            Exptree* b = arg->child[1];
+            if ((SimpUtil::isRational(a) && a->value == Rational(Intg(1), Intg(3)) &&
+                 SimpUtil::isFunction(b, FuncName::sqrt) && b->child.size() == 1 &&
+                 SimpUtil::isRational(b->child[0]) && b->child[0]->value == Rational(Intg(3))) ||
+                (SimpUtil::isRational(b) && b->value == Rational(Intg(1), Intg(3)) &&
+                 SimpUtil::isFunction(a, FuncName::sqrt) && a->child.size() == 1 &&
+                 SimpUtil::isRational(a->child[0]) && a->child[0]->value == Rational(Intg(3)))) {
                 SimpUtil::freeTree(node);
                 Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
                 Exptree* result = SimpUtil::makeFunction("*");
