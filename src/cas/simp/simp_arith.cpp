@@ -274,6 +274,80 @@ namespace CAS {
             }
         }
 
+        // Try to absorb rational constant into a power base
+        // e.g. (1/3) * 3^(1/2) -> 3^(-1/2)
+        if (buf.constantAccum != Rational(Intg(1)) && !buf.constantAccum.isZero()) {
+            for (size_t i = 0; i < buf.count; ++i) {
+                if (!buf.items[i]) continue;
+                if (SimpUtil::isFunction(buf.items[i], "^") && buf.items[i]->child.size() == 2) {
+                    Exptree* powBase = buf.items[i]->child[0];
+                    Exptree* powExp = buf.items[i]->child[1];
+                    if (SimpUtil::isRational(powBase) && SimpUtil::isRational(powExp)) {
+                        Intg bNum = powBase->value.numerator();
+                        Intg bDen = powBase->value.den;
+                        Rational r = buf.constantAccum;
+                        bool absorbed = false;
+                        Rational newExp;
+
+                        // Check: r = 1/b?  -> b^(e-1)
+                        if (bDen == Intg(1) && r == Rational(Intg(1), bNum)) {
+                            newExp = powExp->value - Rational(Intg(1));
+                            absorbed = true;
+                        }
+                        // Check: r = b?  -> b^(e+1)
+                        else if (bDen == Intg(1) && r == Rational(bNum, Intg(1))) {
+                            newExp = powExp->value + Rational(Intg(1));
+                            absorbed = true;
+                        }
+                        // Check: r = b^k for integer k?
+                        else if (bDen == Intg(1) && r.den == Intg(1)) {
+                            // r = n, b = m. Check if n = m^k
+                            Intg n = r.numerator();
+                            Intg m = bNum;
+                            if (n > Intg(1) && m > Intg(1)) {
+                                Intg k(0);
+                                Intg tmp = n;
+                                while (tmp % m == Intg(0)) {
+                                    tmp = tmp / m;
+                                    k = k + Intg(1);
+                                }
+                                if (tmp == Intg(1) && k > Intg(0)) {
+                                    newExp = powExp->value + Rational(k, Intg(1));
+                                    absorbed = true;
+                                }
+                            }
+                        }
+                        // Check: r = b^(-k) -> 1/b^k?
+                        else if (bDen == Intg(1) && r.numerator() == Intg(1)) {
+                            Intg m = bNum;
+                            Intg denom = r.den;
+                            Intg k(0);
+                            Intg tmp = denom;
+                            while (tmp % m == Intg(0)) {
+                                tmp = tmp / m;
+                                k = k + Intg(1);
+                            }
+                            if (tmp == Intg(1) && k > Intg(0)) {
+                                newExp = powExp->value - Rational(k, Intg(1));
+                                absorbed = true;
+                            }
+                        }
+
+                        if (absorbed) {
+                            buf.constantAccum = Rational(Intg(1));
+                            Exptree* newPow = SimpUtil::makeFunction("^");
+                            newPow->child.push_back(SimpUtil::deepCopy(powBase));
+                            newPow->child.push_back(SimpUtil::makeRational(newExp));
+                            newPow = simplifyPow(newPow);
+                            SimpUtil::freeTree(buf.items[i]);
+                            buf.items[i] = newPow;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         // Compact and remove factors of 1
         size_t writeIdx = 0;
         for (size_t i = 0; i < buf.count; ++i) {

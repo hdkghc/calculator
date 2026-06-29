@@ -491,10 +491,14 @@ namespace CAS {
     Exptree* TreeSimplifier::simplifyAtan(Exptree* node) {
         if (node->child.size() != 1) return node;
         Exptree* arg = node->child[0];
+
+        // atan(0) = 0
         if (SimpUtil::isZero(arg)) {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
+
+        // atan(1) = pi/4
         if (SimpUtil::isOne(arg)) {
             SimpUtil::freeTree(node);
             Exptree* quarter = SimpUtil::makeRational(Rational(Intg(1), Intg(4)));
@@ -503,6 +507,75 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
             return result;
         }
+
+        // atan(-1) = -pi/4
+        if (SimpUtil::isMinusOne(arg)) {
+            SimpUtil::freeTree(node);
+            Exptree* negQuarter = SimpUtil::makeRational(Rational(Intg(-1), Intg(4)));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(negQuarter);
+            result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+            return result;
+        }
+
+        // atan(sqrt(3)) = pi/3
+        if (SimpUtil::isFunction(arg, FuncName::sqrt) && arg->child.size() == 1) {
+            if (SimpUtil::isRational(arg->child[0]) && arg->child[0]->value == Rational(Intg(3))) {
+                SimpUtil::freeTree(node);
+                Exptree* third = SimpUtil::makeRational(Rational(Intg(1), Intg(3)));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(third);
+                result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                return result;
+            }
+        }
+
+        // atan(-sqrt(3)) = -pi/3
+        if (SimpUtil::isFunction(arg, "*") && arg->child.size() == 2) {
+            if (SimpUtil::isMinusOne(arg->child[0]) &&
+                SimpUtil::isFunction(arg->child[1], FuncName::sqrt) &&
+                arg->child[1]->child.size() == 1 &&
+                SimpUtil::isRational(arg->child[1]->child[0]) &&
+                arg->child[1]->child[0]->value == Rational(Intg(3))) {
+                SimpUtil::freeTree(node);
+                Exptree* negThird = SimpUtil::makeRational(Rational(Intg(-1), Intg(3)));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(negThird);
+                result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                return result;
+            }
+        }
+
+        // atan(1/sqrt(3)) = pi/6
+        if (SimpUtil::isFunction(arg, "/") && arg->child.size() == 2) {
+            if (SimpUtil::isOne(arg->child[0]) &&
+                SimpUtil::isFunction(arg->child[1], FuncName::sqrt) &&
+                arg->child[1]->child.size() == 1 &&
+                SimpUtil::isRational(arg->child[1]->child[0]) &&
+                arg->child[1]->child[0]->value == Rational(Intg(3))) {
+                SimpUtil::freeTree(node);
+                Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(sixth);
+                result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                return result;
+            }
+        }
+
+        // atan(^(3,-1/2)) = pi/6  (same as 1/sqrt(3) after simplification)
+        if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
+            if (SimpUtil::isRational(arg->child[0]) && arg->child[0]->value == Rational(Intg(3)) &&
+                SimpUtil::isRational(arg->child[1]) && 
+                arg->child[1]->value == Rational(Intg(-1), Intg(2))) {
+                SimpUtil::freeTree(node);
+                Exptree* sixth = SimpUtil::makeRational(Rational(Intg(1), Intg(6)));
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(sixth);
+                result->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                return result;
+            }
+        }
+
         return node;
     }
 
