@@ -810,17 +810,46 @@ namespace CAS {
 
     Exptree* TreeSimplifier::simplifyEigenval(Exptree* node) {
         if (node->child.size() != 1) return node;
-        Exptree* mat = node->child[0];
+        Exptree* mat = SimpUtil::deepCopy(node->child[0]);
         size_t m = 0, n = 0;
-        if (!SimpUtil::matrixDims(mat, m, n)) return node;
-        if (m != n || m == 0) return node;
+        if (!SimpUtil::matrixDims(mat, m, n)) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
+        if (m != n || m == 0) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
 
         bool allRational = true;
         for (size_t i = 0; i < m && allRational; ++i)
             for (size_t j = 0; j < n && allRational; ++j)
                 if (!SimpUtil::isRational(SimpUtil::matrixElem(mat, i, j, n)))
                     allRational = false;
-        if (!allRational) return node;
+        if (!allRational) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
+
+        // Fast path: triangular matrix
+        if (m == 3 || m == 4) {
+            bool isUpper = true, isLower = true;
+            for (size_t i = 0; i < m && (isUpper || isLower); ++i) {
+                for (size_t j = 0; j < m; ++j) {
+                    if (i > j && !SimpUtil::matrixElem(mat, i, j, n)->value.isZero()) isUpper = false;
+                    if (i < j && !SimpUtil::matrixElem(mat, i, j, n)->value.isZero()) isLower = false;
+                }
+            }
+            if (isUpper || isLower) {
+                Exptree* result = SimpUtil::makeFunction(FuncName::vector);
+                result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)m))));
+                for (size_t i = 0; i < m; ++i)
+                    result->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(mat, i, i, n)));
+                SimpUtil::freeTree(node);
+                SimpUtil::freeTree(mat);
+                return result;
+            }
+        }
 
         auto coeffs = eigenvalCoeffs(mat, m, n);
         Exptree* result = SimpUtil::makeFunction(FuncName::vector);
@@ -830,6 +859,7 @@ namespace CAS {
             result->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
             result->child.push_back(SimpUtil::deepCopy(SimpUtil::matrixElem(mat, 0, 0, n)));
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
@@ -857,6 +887,7 @@ namespace CAS {
             result->child.push_back(lambda1);
             result->child.push_back(lambda2);
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
@@ -963,6 +994,7 @@ namespace CAS {
             result->child.push_back(lambda2);
             result->child.push_back(lambda3);
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
@@ -1052,71 +1084,44 @@ namespace CAS {
 
             result->child.push_back(SimpUtil::makeRational(Rational(Intg(4))));
 
-            Exptree* l1 = SimpUtil::makeFunction("+");
-            l1->child.push_back(SimpUtil::deepCopy(negC1_4));
-            Exptree* RplusS = SimpUtil::makeFunction("+");
-            RplusS->child.push_back(SimpUtil::deepCopy(R));
-            RplusS->child.push_back(SimpUtil::deepCopy(S));
-            Exptree* l1x = SimpUtil::makeFunction("*");
-            l1x->child.push_back(half);
-            l1x->child.push_back(RplusS);
-            l1->child.push_back(l1x);
-            result->child.push_back(l1);
+            auto makeRoot = [&](bool useR, bool useS, bool useT, int signS, int signT) -> Exptree* {
+                Exptree* l = SimpUtil::makeFunction("+");
+                l->child.push_back(SimpUtil::deepCopy(negC1_4));
+                Exptree* sum = SimpUtil::makeFunction("+");
+                if (useR) {
+                    if (signS == 1) sum->child.push_back(SimpUtil::deepCopy(R));
+                    else { Exptree* nr = SimpUtil::makeFunction("*"); nr->child.push_back(SimpUtil::makeRational(Rational(Intg(-1)))); nr->child.push_back(SimpUtil::deepCopy(R)); sum->child.push_back(nr); }
+                } else {
+                    if (signS == 1) sum->child.push_back(SimpUtil::deepCopy(S));
+                    else { Exptree* ns = SimpUtil::makeFunction("*"); ns->child.push_back(SimpUtil::makeRational(Rational(Intg(-1)))); ns->child.push_back(SimpUtil::deepCopy(S)); sum->child.push_back(ns); }
+                }
+                if (useT) {
+                    if (signT == 1) sum->child.push_back(SimpUtil::deepCopy(T));
+                    else { Exptree* nt = SimpUtil::makeFunction("*"); nt->child.push_back(SimpUtil::makeRational(Rational(Intg(-1)))); nt->child.push_back(SimpUtil::deepCopy(T)); sum->child.push_back(nt); }
+                }
+                Exptree* lx = SimpUtil::makeFunction("*");
+                lx->child.push_back(SimpUtil::deepCopy(half));
+                lx->child.push_back(sum);
+                l->child.push_back(lx);
+                return l;
+            };
 
-            Exptree* l2 = SimpUtil::makeFunction("+");
-            l2->child.push_back(SimpUtil::deepCopy(negC1_4));
-            Exptree* RminusS = SimpUtil::makeFunction("+");
-            RminusS->child.push_back(SimpUtil::deepCopy(R));
-            Exptree* negS2 = SimpUtil::makeFunction("*");
-            negS2->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negS2->child.push_back(SimpUtil::deepCopy(S));
-            RminusS->child.push_back(negS2);
-            Exptree* l2x = SimpUtil::makeFunction("*");
-            l2x->child.push_back(SimpUtil::deepCopy(half));
-            l2x->child.push_back(RminusS);
-            l2->child.push_back(l2x);
-            result->child.push_back(l2);
-
-            Exptree* l3 = SimpUtil::makeFunction("+");
-            l3->child.push_back(SimpUtil::deepCopy(negC1_4));
-            Exptree* negRplusT = SimpUtil::makeFunction("+");
-            Exptree* negR3 = SimpUtil::makeFunction("*");
-            negR3->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negR3->child.push_back(SimpUtil::deepCopy(R));
-            negRplusT->child.push_back(negR3);
-            negRplusT->child.push_back(SimpUtil::deepCopy(T));
-            Exptree* l3x = SimpUtil::makeFunction("*");
-            l3x->child.push_back(SimpUtil::deepCopy(half));
-            l3x->child.push_back(negRplusT);
-            l3->child.push_back(l3x);
-            result->child.push_back(l3);
-
-            Exptree* l4 = SimpUtil::makeFunction("+");
-            l4->child.push_back(SimpUtil::deepCopy(negC1_4));
-            Exptree* negRminusT = SimpUtil::makeFunction("+");
-            Exptree* negR4 = SimpUtil::makeFunction("*");
-            negR4->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negR4->child.push_back(SimpUtil::deepCopy(R));
-            negRminusT->child.push_back(negR4);
-            Exptree* negT = SimpUtil::makeFunction("*");
-            negT->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-            negT->child.push_back(SimpUtil::deepCopy(T));
-            negRminusT->child.push_back(negT);
-            Exptree* l4x = SimpUtil::makeFunction("*");
-            l4x->child.push_back(SimpUtil::deepCopy(half));
-            l4x->child.push_back(negRminusT);
-            l4->child.push_back(l4x);
-            result->child.push_back(l4);
+            result->child.push_back(makeRoot(true, false, false, 1, 1));   // R+S
+            result->child.push_back(makeRoot(true, false, false, 1, -1));  // R-S
+            result->child.push_back(makeRoot(false, true, true, -1, 1));   // -R+T
+            result->child.push_back(makeRoot(false, true, true, -1, -1));  // -R-T
 
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
-        // n >= 5: characteristic polynomial coefficients
+        // n >= 5
         result->child.push_back(SimpUtil::makeRational(Rational(Intg((int)(m+1)))));
         for (size_t i = 0; i <= m; ++i)
             result->child.push_back(SimpUtil::makeRational(coeffs[i]));
         SimpUtil::freeTree(node);
+        SimpUtil::freeTree(mat);
         return result;
     }
 
@@ -1124,17 +1129,26 @@ namespace CAS {
 
     Exptree* TreeSimplifier::simplifyEigenvec(Exptree* node) {
         if (node->child.size() != 1) return node;
-        Exptree* mat = node->child[0];
+        Exptree* mat = SimpUtil::deepCopy(node->child[0]);
         size_t m = 0, n = 0;
-        if (!SimpUtil::matrixDims(mat, m, n)) return node;
-        if (m != n || m == 0) return node;
+        if (!SimpUtil::matrixDims(mat, m, n)) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
+        if (m != n || m == 0) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
 
         bool allRational = true;
         for (size_t i = 0; i < m && allRational; ++i)
             for (size_t j = 0; j < n && allRational; ++j)
                 if (!SimpUtil::isRational(SimpUtil::matrixElem(mat, i, j, n)))
                     allRational = false;
-        if (!allRational) return node;
+        if (!allRational) {
+            SimpUtil::freeTree(mat);
+            return node;
+        }
 
         if (m == 1) {
             Exptree* result = SimpUtil::makeFunction(FuncName::vector);
@@ -1144,6 +1158,7 @@ namespace CAS {
             v->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
             result->child.push_back(v);
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
@@ -1155,6 +1170,106 @@ namespace CAS {
             Rational trace = a + d;
             Rational det = a*d - b*c;
             Rational disc = trace*trace - Rational(Intg(4))*det;
+
+            if (disc < Rational(Intg(0))) {
+                // Complex eigenvalues: eigenvectors = [b, λ-a] or [λ-d, c]
+                Rational imagPart;
+                // disc is negative, sqrt(-disc)
+                Rational posDisc = Rational(Intg(0)) - disc;
+                
+                Exptree* result = SimpUtil::makeFunction(FuncName::vector);
+                result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+
+                // λ₁ = (trace + i*sqrt(-disc)) / 2
+                // v₁ = [b, λ₁-a]
+                Exptree* v1 = SimpUtil::makeFunction(FuncName::vector);
+                v1->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                if (!b.isZero()) {
+                    v1->child.push_back(SimpUtil::makeRational(b));
+                    // λ₁-a = (trace + i*sqrt(-disc))/2 - a = (trace-2a)/2 + i*sqrt(-disc)/2
+                    Exptree* realPart = SimpUtil::makeRational((trace - Rational(Intg(2))*a) * Rational(Intg(1), Intg(2)));
+                    Exptree* sqrtPart = SimpUtil::makeFunction(FuncName::sqrt);
+                    sqrtPart->child.push_back(SimpUtil::makeRational(posDisc));
+                    sqrtPart = simplifySqrt(sqrtPart);
+                    Exptree* imagPart = SimpUtil::makeFunction("*");
+                    imagPart->child.push_back(SimpUtil::makeRational(Rational(Intg(1), Intg(2))));
+                    imagPart->child.push_back(sqrtPart);
+                    imagPart = simplifyMul(imagPart);
+                    
+                    Exptree* vy = SimpUtil::makeFunction("+");
+                    vy->child.push_back(realPart);
+                    Exptree* imagI = SimpUtil::makeFunction("*");
+                    imagI->child.push_back(imagPart);
+                    imagI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                    vy->child.push_back(imagI);
+                    v1->child.push_back(vy);
+                } else {
+                    Exptree* realPart = SimpUtil::makeRational((trace - Rational(Intg(2))*d) * Rational(Intg(1), Intg(2)));
+                    Exptree* sqrtPart = SimpUtil::makeFunction(FuncName::sqrt);
+                    sqrtPart->child.push_back(SimpUtil::makeRational(posDisc));
+                    sqrtPart = simplifySqrt(sqrtPart);
+                    Exptree* imagPart = SimpUtil::makeFunction("*");
+                    imagPart->child.push_back(SimpUtil::makeRational(Rational(Intg(1), Intg(2))));
+                    imagPart->child.push_back(sqrtPart);
+                    imagPart = simplifyMul(imagPart);
+                    
+                    Exptree* vx = SimpUtil::makeFunction("+");
+                    vx->child.push_back(realPart);
+                    Exptree* imagI = SimpUtil::makeFunction("*");
+                    imagI->child.push_back(imagPart);
+                    imagI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                    vx->child.push_back(imagI);
+                    v1->child.push_back(vx);
+                    v1->child.push_back(SimpUtil::makeRational(c));
+                }
+
+                // v₂ = conjugate of v₁ (for conjugate eigenvalues)
+                Exptree* v2 = SimpUtil::makeFunction(FuncName::vector);
+                v2->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
+                if (!b.isZero()) {
+                    v2->child.push_back(SimpUtil::makeRational(b));
+                    Exptree* realPart = SimpUtil::makeRational((trace - Rational(Intg(2))*a) * Rational(Intg(1), Intg(2)));
+                    Exptree* sqrtPart = SimpUtil::makeFunction(FuncName::sqrt);
+                    sqrtPart->child.push_back(SimpUtil::makeRational(posDisc));
+                    sqrtPart = simplifySqrt(sqrtPart);
+                    Exptree* imagPart = SimpUtil::makeFunction("*");
+                    imagPart->child.push_back(SimpUtil::makeRational(Rational(Intg(-1), Intg(2))));
+                    imagPart->child.push_back(sqrtPart);
+                    imagPart = simplifyMul(imagPart);
+                    
+                    Exptree* vy = SimpUtil::makeFunction("+");
+                    vy->child.push_back(realPart);
+                    Exptree* imagI = SimpUtil::makeFunction("*");
+                    imagI->child.push_back(imagPart);
+                    imagI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                    vy->child.push_back(imagI);
+                    v2->child.push_back(vy);
+                } else {
+                    Exptree* realPart = SimpUtil::makeRational((trace - Rational(Intg(2))*d) * Rational(Intg(1), Intg(2)));
+                    Exptree* sqrtPart = SimpUtil::makeFunction(FuncName::sqrt);
+                    sqrtPart->child.push_back(SimpUtil::makeRational(posDisc));
+                    sqrtPart = simplifySqrt(sqrtPart);
+                    Exptree* imagPart = SimpUtil::makeFunction("*");
+                    imagPart->child.push_back(SimpUtil::makeRational(Rational(Intg(-1), Intg(2))));
+                    imagPart->child.push_back(sqrtPart);
+                    imagPart = simplifyMul(imagPart);
+                    
+                    Exptree* vx = SimpUtil::makeFunction("+");
+                    vx->child.push_back(realPart);
+                    Exptree* imagI = SimpUtil::makeFunction("*");
+                    imagI->child.push_back(imagPart);
+                    imagI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+                    vx->child.push_back(imagI);
+                    v2->child.push_back(vx);
+                    v2->child.push_back(SimpUtil::makeRational(c));
+                }
+
+                result->child.push_back(v1);
+                result->child.push_back(v2);
+                SimpUtil::freeTree(node);
+                SimpUtil::freeTree(mat);
+                return result;
+            }
 
             Exptree* result = SimpUtil::makeFunction(FuncName::vector);
             result->child.push_back(SimpUtil::makeRational(Rational(Intg(2))));
@@ -1186,12 +1301,30 @@ namespace CAS {
                     vy->child.push_back(lambda);
                     vy->child.push_back(SimpUtil::makeRational(Rational(Intg(0))-a));
                     v->child.push_back(vy);
-                } else {
+                } else if (!c.isZero()) {
                     Exptree* vx = SimpUtil::makeFunction("+");
                     vx->child.push_back(lambda);
                     vx->child.push_back(SimpUtil::makeRational(Rational(Intg(0))-d));
                     v->child.push_back(vx);
                     v->child.push_back(SimpUtil::makeRational(c));
+                } else {
+                    if (a != d) {
+                        if (sign == 1) {
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                        } else {
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                        }
+                    } else {
+                        if (sign == 1) {
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                        } else {
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(0))));
+                            v->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                        }
+                    }
                 }
                 return v;
             };
@@ -1199,9 +1332,11 @@ namespace CAS {
             result->child.push_back(buildVec(1));
             result->child.push_back(buildVec(-1));
             SimpUtil::freeTree(node);
+            SimpUtil::freeTree(mat);
             return result;
         }
 
+        SimpUtil::freeTree(mat);
         return node;
     }
 
