@@ -21,6 +21,7 @@
 #include "cas/treesimp.hpp"
 #include "cas/exptree.hpp"
 #include "cas/expdef.hpp"
+#include "cas/expand.hpp"
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -346,9 +347,17 @@ int main() {
         if (line.empty()) continue;
         if (line == "quit" || line == "exit" || line == "q") break;
 
+        // Check for expand command: expand <expr>
+        bool doExpand = false;
+        std::string exprStr = line;
+        if (line.rfind("expand ", 0) == 0) {
+            doExpand = true;
+            exprStr = line.substr(7);
+        }
+
         // Parse
         size_t pos = 0;
-        Exptree* expr = parseExpr(line, pos);
+        Exptree* expr = parseExpr(exprStr, pos);
 
         if (!expr) {
             std::cout << "Parse error at position " << pos << std::endl;
@@ -362,6 +371,13 @@ int main() {
 
         // Simplify
         TreeSimplifier::simplify(expr);
+
+        // Expand if requested
+        if (doExpand) {
+            TreeExpander::expand(expr);
+            // Simplify again after expansion
+            TreeSimplifier::simplify(expr);
+        }
 
         // Print output
         std::cout << "Out: ";

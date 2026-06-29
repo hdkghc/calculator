@@ -37,45 +37,45 @@ namespace CAS {
      *           Designed for the RP2040 microcontroller's memory constraints.
      */
     class ExptreePool {
-        /** @brief Number of pre-allocated nodes (64) */
-        static constexpr size_t POOL_SIZE = 64;
-        /** @brief Pre-reserved child pointer capacity per node (6) */
-        static constexpr size_t MAX_CHILDREN = 6;
+            /** @brief Number of pre-allocated nodes (64) */
+            static constexpr size_t POOL_SIZE = 64;
+            /** @brief Pre-reserved child pointer capacity per node (6) */
+            static constexpr size_t MAX_CHILDREN = 6;
 
-        /** @brief Internal pool entry: node + used flag */
-        struct PoolNode {
-            Exptree node;       ///< The expression tree node
-            bool used;          ///< Allocation status
-            /** @brief Construct as free, pre-reserve child capacity */
-            PoolNode() : used(false) { node.child.reserve(MAX_CHILDREN); }
-        };
+            /** @brief Internal pool entry: node + used flag */
+            struct PoolNode {
+                Exptree node;       ///< The expression tree node
+                bool used;          ///< Allocation status
+                /** @brief Construct as free, pre-reserve child capacity */
+                PoolNode() : used(false) { node.child.reserve(MAX_CHILDREN); }
+            };
 
-        PoolNode pool_[POOL_SIZE];  ///< Fixed array of pool entries
+            PoolNode pool_[POOL_SIZE];  ///< Fixed array of pool entries
 
-    public:
-        /**
-         *  @name allocate
-         *  @brief Allocate a node from pool or heap
-         *  @return Pointer to initialized Exptree node (valNull, value 0)
-         *  @details O(POOL_SIZE) linear search, effectively O(1).
-         */
-        Exptree* allocate();
+        public:
+            /**
+             *  @name allocate
+             *  @brief Allocate a node from pool or heap
+             *  @return Pointer to initialized Exptree node (valNull, value 0)
+             *  @details O(POOL_SIZE) linear search, effectively O(1).
+             */
+            Exptree* allocate();
 
-        /**
-         *  @name deallocate
-         *  @brief Recursively free node and descendants
-         *  @param node Root of subtree to free, nullptr safe
-         *  @details Children freed depth-first. Pool nodes reset to free;
-         *           heap nodes deleted.
-         */
-        void deallocate(Exptree* node);
+            /**
+             *  @name deallocate
+             *  @brief Recursively free node and descendants
+             *  @param node Root of subtree to free, nullptr safe
+             *  @details Children freed depth-first. Pool nodes reset to free;
+             *           heap nodes deleted.
+             */
+            void deallocate(Exptree* node);
 
-        /**
-         *  @name available
-         *  @brief Query free pool entries remaining
-         *  @return Count of unused pool slots (excludes heap fallback)
-         */
-        size_t available() const;
+            /**
+             *  @name available
+             *  @brief Query free pool entries remaining
+             *  @return Count of unused pool slots (excludes heap fallback)
+             */
+            size_t available() const;
     };
 
     /** @brief Global pool instance, defined in simplify.cpp */
