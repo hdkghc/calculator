@@ -776,14 +776,28 @@ namespace CAS {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(0)));
         }
-        
+
         // x^0 = 1
         if (SimpUtil::isZero(exp)) {
+            // Check for matrix^0 = I
+            if (SimpUtil::isMatrixNode(base)) {
+                size_t dim = 0, dummy = 0;
+                SimpUtil::matrixDims(base, dim, dummy);
+                node->child.clear();
+                SimpUtil::freeTree(node);
+                Exptree* I = SimpUtil::makeFunction(FuncName::matrix);
+                I->child.push_back(SimpUtil::makeRational(Rational(Intg((int)dim))));
+                I->child.push_back(SimpUtil::makeRational(Rational(Intg((int)dim))));
+                for (size_t i = 0; i < dim; ++i)
+                    for (size_t j = 0; j < dim; ++j)
+                        I->child.push_back(SimpUtil::makeRational(i == j ? Rational(Intg(1)) : Rational(Intg(0))));
+                return I;
+            }
             node->child.clear();
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
-        
+
         // x^1 = x
         if (SimpUtil::isOne(exp)) {
             node->child.clear();
@@ -796,6 +810,98 @@ namespace CAS {
             node->child.clear();
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(Rational(Intg(1)));
+        }
+
+        // Matrix power: A^n or A^(-1)
+        if (SimpUtil::isMatrixNode(base) && SimpUtil::isInteger(exp)) {
+            Intg expVal = exp->value.numerator();
+
+            if (expVal == Intg(0)) {
+                size_t dim = 0, dummy = 0;
+                SimpUtil::matrixDims(base, dim, dummy);
+                node->child.clear();
+                SimpUtil::freeTree(node);
+                Exptree* I = SimpUtil::makeFunction(FuncName::matrix);
+                I->child.push_back(SimpUtil::makeRational(Rational(Intg((int)dim))));
+                I->child.push_back(SimpUtil::makeRational(Rational(Intg((int)dim))));
+                for (size_t i = 0; i < dim; ++i)
+                    for (size_t j = 0; j < dim; ++j)
+                        I->child.push_back(SimpUtil::makeRational(i == j ? Rational(Intg(1)) : Rational(Intg(0))));
+                return I;
+            }
+
+            if (expVal == Intg(1)) {
+                node->child.clear();
+                SimpUtil::freeTree(node);
+                return base;
+            }
+
+            if (expVal == Intg(-1)) {
+                // A^(-1) = adj(A) / det(A)
+                Exptree* adj = SimpUtil::makeFunction(FuncName::adjoint);
+                adj->child.push_back(SimpUtil::deepCopy(base));
+                adj = simplifyAdjoint(adj);
+
+                Exptree* detNode = SimpUtil::makeFunction(FuncName::det);
+                detNode->child.push_back(SimpUtil::deepCopy(base));
+                detNode = simplifyDet(detNode);
+
+                if (SimpUtil::isMatrixNode(adj) && SimpUtil::isRational(detNode) && !detNode->value.isZero()) {
+                    Rational invDet = Rational(Intg(1)) / detNode->value;
+                    Exptree* result = SimpUtil::makeFunction("*");
+                    result->child.push_back(SimpUtil::makeRational(invDet));
+                    result->child.push_back(adj);
+                    SimpUtil::freeTree(detNode);
+                    node->child.clear();
+                    SimpUtil::freeTree(node);
+                    return simplifyMul(result);
+                }
+                SimpUtil::freeTree(adj);
+                SimpUtil::freeTree(detNode);
+                return node;
+            }
+
+            if (expVal < Intg(-1)) {
+                // A^(-n) = (A^(-1))^n
+                Exptree* inv = SimpUtil::makeFunction("^");
+                inv->child.push_back(SimpUtil::deepCopy(base));
+                inv->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                inv = simplifyPow(inv);
+
+                if (SimpUtil::isMatrixNode(inv)) {
+                    Intg posExp = Intg(0) - expVal;
+                    Exptree* result = SimpUtil::deepCopy(inv);
+                    for (Intg i(1); i < posExp; i = i + Intg(1)) {
+                        Exptree* prod = SimpUtil::makeFunction("*");
+                        prod->child.push_back(result);
+                        prod->child.push_back(SimpUtil::deepCopy(inv));
+                        result = simplifyMul(prod);
+                    }
+                    SimpUtil::freeTree(inv);
+                    node->child.clear();
+                    SimpUtil::freeTree(node);
+                    return result;
+                }
+                SimpUtil::freeTree(inv);
+                return node;
+            }
+
+            // Positive power > 1
+            Exptree* result = SimpUtil::deepCopy(base);
+            for (Intg i(1); i < expVal; i = i + Intg(1)) {
+                Exptree* prod = SimpUtil::makeFunction("*");
+                prod->child.push_back(result);
+                prod->child.push_back(SimpUtil::deepCopy(base));
+                result = simplifyMul(prod);
+            }
+            node->child.clear();
+            SimpUtil::freeTree(node);
+            return result;
+        }
+
+        // Vector power: not defined, leave as-is
+        if (SimpUtil::isVectorNode(base)) {
+            return node;
         }
 
         // Constant folding for rational base and exponent
@@ -859,11 +965,7 @@ namespace CAS {
             Intg modRes = n % Intg(2);
             node->child.clear();
             SimpUtil::freeTree(node);
-            if (modRes == Intg(0)) {
-                return SimpUtil::makeRational(Rational(Intg(1)));
-            } else {
-                return SimpUtil::makeRational(Rational(Intg(-1)));
-            }
+            return SimpUtil::makeRational(modRes == Intg(0) ? Rational(Intg(1)) : Rational(Intg(-1)));
         }
 
         // i^n cycle
@@ -875,28 +977,21 @@ namespace CAS {
             node->child.clear();
             SimpUtil::freeTree(node);
 
-            if (mod4 == Intg(0)) {
-                return SimpUtil::makeRational(Rational(Intg(1)));
-            } else if (mod4 == Intg(1)) {
-                return SimpUtil::makeVariable(ConstName::i);
-            } else if (mod4 == Intg(2)) {
-                return SimpUtil::makeRational(Rational(Intg(-1)));
-            } else {
-                Exptree* negI = SimpUtil::makeFunction("*");
-                negI->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
-                negI->child.push_back(SimpUtil::makeVariable(ConstName::i));
-                return negI;
-            }
+            if (mod4 == Intg(0)) return SimpUtil::makeRational(Rational(Intg(1)));
+            if (mod4 == Intg(1)) return SimpUtil::makeVariable(ConstName::i);
+            if (mod4 == Intg(2)) return SimpUtil::makeRational(Rational(Intg(-1)));
+
+            Exptree* negI = SimpUtil::makeFunction("*");
+            negI->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+            negI->child.push_back(SimpUtil::makeVariable(ConstName::i));
+            return negI;
         }
 
         // Complex power: (a*i)^integer -> a^n * i^n
         if (SimpUtil::isFunction(base, "*") && SimpUtil::isInteger(exp)) {
             bool hasI = false;
             for (size_t i = 0; i < base->child.size(); ++i) {
-                if (SimpUtil::isConstantI(base->child[i])) {
-                    hasI = true;
-                    break;
-                }
+                if (SimpUtil::isConstantI(base->child[i])) { hasI = true; break; }
             }
             if (hasI) {
                 Exptree* realPart = SimpUtil::makeFunction("*");
@@ -926,37 +1021,104 @@ namespace CAS {
             }
         }
 
+        // i^i and (a*i)^(b*i) — convert to exponential form
+        bool exp_has_i = SimpUtil::isConstantI(exp);
+        if (!exp_has_i && SimpUtil::isFunction(exp, "*")) {
+            for (size_t k = 0; k < exp->child.size(); ++k) {
+                if (SimpUtil::isConstantI(exp->child[k])) { exp_has_i = true; break; }
+            }
+        }
+
+        if (exp_has_i) {
+            if (SimpUtil::isConstantI(base)) {
+                node->child.clear();
+                SimpUtil::freeTree(node);
+                Exptree* negHalf = SimpUtil::makeRational(Rational(Intg(-1), Intg(2)));
+                Exptree* negPiHalf = SimpUtil::makeFunction("*");
+                negPiHalf->child.push_back(negHalf);
+                negPiHalf->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                Exptree* result = SimpUtil::makeFunction("^");
+                result->child.push_back(SimpUtil::makeVariable(ConstName::e));
+                result->child.push_back(negPiHalf);
+                return result;
+            }
+
+            bool base_has_i = false;
+            if (SimpUtil::isFunction(base, "*")) {
+                for (size_t k = 0; k < base->child.size(); ++k) {
+                    if (SimpUtil::isConstantI(base->child[k])) { base_has_i = true; break; }
+                }
+            }
+
+            if (base_has_i) {
+                Exptree* a = SimpUtil::makeFunction("*");
+                for (size_t k = 0; k < base->child.size(); ++k)
+                    if (!SimpUtil::isConstantI(base->child[k]))
+                        a->child.push_back(SimpUtil::deepCopy(base->child[k]));
+                if (a->child.size() == 0) { SimpUtil::freeTree(a); a = SimpUtil::makeRational(Rational(Intg(1))); }
+                else if (a->child.size() == 1) { Exptree* s = a->child[0]; a->child.clear(); SimpUtil::freeTree(a); a = s; }
+                else a = simplifyMul(a);
+
+                Exptree* b;
+                if (SimpUtil::isConstantI(exp)) b = SimpUtil::makeRational(Rational(Intg(1)));
+                else {
+                    Exptree* bNode = SimpUtil::makeFunction("*");
+                    for (size_t k = 0; k < exp->child.size(); ++k)
+                        if (!SimpUtil::isConstantI(exp->child[k]))
+                            bNode->child.push_back(SimpUtil::deepCopy(exp->child[k]));
+                    if (bNode->child.size() == 0) { SimpUtil::freeTree(bNode); b = SimpUtil::makeRational(Rational(Intg(1))); }
+                    else if (bNode->child.size() == 1) { b = bNode->child[0]; bNode->child.clear(); SimpUtil::freeTree(bNode); }
+                    else b = simplifyMul(bNode);
+                }
+
+                Exptree* negHalf = SimpUtil::makeRational(Rational(Intg(-1), Intg(2)));
+                Exptree* bPi = SimpUtil::makeFunction("*");
+                bPi->child.push_back(SimpUtil::deepCopy(b));
+                bPi->child.push_back(SimpUtil::makeVariable(ConstName::pi));
+                Exptree* expTerm = SimpUtil::makeFunction("*");
+                expTerm->child.push_back(negHalf);
+                expTerm->child.push_back(bPi);
+                expTerm = simplifyMul(expTerm);
+
+                Exptree* ePart = SimpUtil::makeFunction("^");
+                ePart->child.push_back(SimpUtil::makeVariable(ConstName::e));
+                ePart->child.push_back(expTerm);
+
+                Exptree* aExpBI = SimpUtil::makeFunction("^");
+                aExpBI->child.push_back(SimpUtil::deepCopy(a));
+                aExpBI->child.push_back(SimpUtil::deepCopy(exp));
+
+                Exptree* result = SimpUtil::makeFunction("*");
+                result->child.push_back(ePart);
+                result->child.push_back(aExpBI);
+
+                node->child.clear();
+                SimpUtil::freeTree(node);
+                return simplifyMul(result);
+            }
+        }
+
         // sqrt(-1) = i, sqrt(-a) = i*sqrt(a)
         Exptree* complexSqrt = handleComplexSqrt(node);
-        if (complexSqrt) {
-            return complexSqrt;
-        }
+        if (complexSqrt) return complexSqrt;
 
         // (x^a)^b -> x^(a*b) when safe
         if (SimpUtil::isFunction(base, "^") && base->child.size() == 2) {
             bool canCombine = SimpUtil::isPositive(base->child[0]);
-            if (!canCombine && SimpUtil::isRational(base->child[1]) && SimpUtil::isRational(exp)) {
+            if (!canCombine && SimpUtil::isRational(base->child[1]) && SimpUtil::isRational(exp))
                 canCombine = base->child[1]->value.isInteger() && exp->value.isInteger();
-            }
-            // Also allow if the resulting exponent simplifies to an integer
-            // e.g. (x^(1/2))^2 -> x^1 -> x
             if (!canCombine && SimpUtil::isRational(base->child[1]) && SimpUtil::isRational(exp)) {
                 Rational newExpVal = base->child[1]->value * exp->value;
-                if (newExpVal.isInteger()) {
-                    canCombine = true;
-                }
+                if (newExpVal.isInteger()) canCombine = true;
             }
-
             if (canCombine) {
                 Exptree* newExp = SimpUtil::makeFunction("*");
                 newExp->child.push_back(SimpUtil::deepCopy(base->child[1]));
                 newExp->child.push_back(SimpUtil::deepCopy(exp));
                 newExp = simplifyMul(newExp);
-
                 Exptree* result = SimpUtil::makeFunction("^");
                 result->child.push_back(SimpUtil::deepCopy(base->child[0]));
                 result->child.push_back(newExp);
-
                 node->child.clear();
                 SimpUtil::freeTree(node);
                 return result;

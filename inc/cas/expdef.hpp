@@ -91,6 +91,7 @@ namespace CAS {
         const char *const vector    = "\001vc";
         const char *const dot       = "\001v.";
         const char *const angle     = "\001va";
+        const char *const norm      = "\001nm";
         const char *const det       = "\001dt";
         const char *const matrix    = "\001mt";
         const char *const transpose = "\001tr";

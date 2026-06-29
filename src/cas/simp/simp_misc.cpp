@@ -191,6 +191,20 @@ namespace CAS {
             SimpUtil::freeTree(node);
             return SimpUtil::makeRational(posVal);
         }
+        
+        // abs(vector) = sqrt(dot(v, v))
+        if (SimpUtil::isVectorNode(arg)) {
+            Exptree* dotNode = SimpUtil::makeFunction(FuncName::dot);
+            dotNode->child.push_back(SimpUtil::deepCopy(arg));
+            dotNode->child.push_back(SimpUtil::deepCopy(arg));
+            dotNode = simplifyDot(dotNode);
+
+            Exptree* result = SimpUtil::makeFunction(FuncName::sqrt);
+            result->child.push_back(dotNode);
+
+            SimpUtil::freeTree(node);
+            return simplifySqrt(result);
+        }
 
         // abs(i) = 1
         if (SimpUtil::isConstantI(arg)) {

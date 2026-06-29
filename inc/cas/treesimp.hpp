@@ -451,10 +451,35 @@ namespace CAS {
             /**
              *  @name simplifyMulVM
              *  @brief Multiplication for vectors/matrices:
-             *         matrix * matrix (矩阵乘法), vector * vector (点积/叉积),
-             *         scalar * vector/matrix (数乘)
+             *         matrix * matrix, vector * vector,
+             *         scalar * vector/matrix
              */
             Exptree* simplifyMulVM(Exptree* node);
+            /**
+             *  @name simplifyNormalize
+             *  @brief Normalization for vectors
+             */
+            Exptree* simplifyNormalize(Exptree* node);
+            /**
+             *  @name simplifyRank
+             *  @brief Rank for matrixs
+             */
+            Exptree* simplifyRank(Exptree* node);
+            /**
+             *  @name simplifyAdjoint
+             *  @brief Adjoint for matrixs
+             */
+            Exptree* simplifyAdjoint(Exptree* node);
+            /**
+             *  @name simplifyEigenval
+             *  @brief Eigen value for matrixs
+             */
+            Exptree* simplifyEigenval(Exptree* node);
+            /**
+             *  @name simplifyEigenvec
+             *  @brief Eigen vector for matrixs
+             */
+            Exptree* simplifyEigenvec(Exptree* node);
 
             // ========== Internal helper methods ==========
 

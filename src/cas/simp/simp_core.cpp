@@ -123,6 +123,11 @@ namespace CAS {
         if (func == FuncName::angle)        return simplifyAngle(node);
         if (func == FuncName::det)          return simplifyDet(node);
         if (func == FuncName::transpose)    return simplifyTranspose(node);
+        if (func == FuncName::norm)         return simplifyNormalize(node);
+        if (func == FuncName::eigenval)     return simplifyEigenval(node);
+        if (func == FuncName::eigenvec)     return simplifyEigenvec(node);
+        if (func == FuncName::adjoint)      return simplifyAdjoint(node);
+        if (func == FuncName::rank)         return simplifyRank(node);
 
         return node;
     }
