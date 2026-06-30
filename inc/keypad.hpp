@@ -34,61 +34,63 @@ namespace Keypad {
 
     // Control key identifiers: \003\000 ~ \003\037
     namespace Ctrl {
-        const std::string SHIFT   = "\x03\x00";
-        const std::string ALPHA   = "\x03\x01";
-        const std::string CTRL    = "\x03\x02";
-        const std::string ON      = "\x03\x03";
-        const std::string OFF     = "\x03\x04";
-        const std::string AC      = "\x03\x05";
-        const std::string DEL     = "\x03\x06";
-        const std::string INS     = "\x03\x07";
-        const std::string EXE     = "\x03\x08";
-        const std::string LOCK    = "\x03\x09";
-        const std::string ABOUT   = "\x03\x0A";
-        const std::string MENU    = "\x03\x0B";
-        const std::string SET     = "\x03\x0C";
-        const std::string CLR     = "\x03\x0D";
-        const std::string MODE    = "\x03\x0E";
-        const std::string OPTN    = "\x03\x0F";
-        const std::string FMT     = "\x03\x10";
-        const std::string SOLV    = "\x03\x11";
-        const std::string CALC    = "\x03\x12";
-        const std::string CONST   = "\x03\x13";
-        const std::string CONV    = "\x03\x14";
-        const std::string OK      = "\x03\x15";
+        const char *const SHIFT   = "\x03\x00";
+        const char *const ALPHA   = "\x03\x01";
+        const char *const CTRL    = "\x03\x02";
+        const char *const ON      = "\x03\x03";
+        const char *const OFF     = "\x03\x04";
+        const char *const AC      = "\x03\x05";
+        const char *const DEL     = "\x03\x06";
+        const char *const INS     = "\x03\x07";
+        const char *const EXE     = "\x03\x08";
+        const char *const LOCK    = "\x03\x09";
+        const char *const ABOUT   = "\x03\x0A";
+        const char *const MENU    = "\x03\x0B";
+        const char *const SET     = "\x03\x0C";
+        const char *const CLR     = "\x03\x0D";
+        const char *const MODE    = "\x03\x0E";
+        const char *const OPTN    = "\x03\x0F";
+        const char *const FMT     = "\x03\x10";
+        const char *const SOLV    = "\x03\x11";
+        const char *const CALC    = "\x03\x12";
+        const char *const CONST   = "\x03\x13";
+        const char *const CONV    = "\x03\x14";
+        const char *const OK      = "\x03\x15";
         // Graph controls
-        const std::string ZOOM_P  = "\x03\x16";  // Zoom+
-        const std::string ZOOM_M  = "\x03\x17";  // Zoom-
-        const std::string FACTOR  = "\x03\x18";
-        const std::string EXPAND  = "\x03\x19";
-        const std::string Z_PLUS  = "\x03\x1A";  // Z+
-        const std::string Z_MINUS = "\x03\x1B";  // Z-
-        const std::string Y_PLUS  = "\x03\x1C";  // Y+ (up)
-        const std::string Y_MINUS = "\x03\x1D";  // Y- (down)
-        const std::string X_PLUS  = "\x03\x1E";  // X+ (right)
-        const std::string X_MINUS = "\x03\x1F";  // X- (left)
+        const char *const ZOOM_P  = "\x03\x16";  // Zoom+
+        const char *const ZOOM_M  = "\x03\x17";  // Zoom-
+        const char *const FACTOR  = "\x03\x18";
+        const char *const EXPAND  = "\x03\x19";
+        const char *const Z_PLUS  = "\x03\x1A";  // Z+
+        const char *const Z_MINUS = "\x03\x1B";  // Z-
+        const char *const Y_PLUS  = "\x03\x1C";  // Y+ (up)
+        const char *const Y_MINUS = "\x03\x1D";  // Y- (down)
+        const char *const X_PLUS  = "\x03\x1E";  // X+ (right)
+        const char *const X_MINUS = "\x03\x1F";  // X- (left)
         // 
-        const std::string BLOCKL  = "\x03\x20";  // Input block left mark
-        const std::string BLOCKR  = "\x03\x21";  // Input block right mark
+        const char *const BLOCKL  = "\x03\x20";  // Input block left mark
+        const char *const BLOCKR  = "\x03\x21";  // Input block right mark
+        const char *const STO     = "\x03\x22";
+        const char *const RCL     = "\x03\x23";
     }
 
     // Variable identifiers
     namespace VarName {
-        const std::string Ans    = "\x04\x01";  // Ans
-        const std::string PAns   = "\x04\x02";  // PreAns
-        const std::string theta  = "\x04\x03";  // theta
-        const std::string lambda = "\x04\x04";  // lambda
-        const std::string mu     = "\x04\x05";  // mu
-        const std::string alpha  = "\x04\x06";  // alpha
+        const char *const Ans    = "\x04\x01";  // Ans
+        const char *const PAns   = "\x04\x02";  // PreAns
+        const char *const theta  = "\x04\x03";  // theta
+        const char *const lambda = "\x04\x04";  // lambda
+        const char *const mu     = "\x04\x05";  // mu
+        const char *const alpha  = "\x04\x06";  // alpha
     }
 
     // Special symbols
     namespace Spec {
-        const std::string EE     = "\x05\x01";  // EE (scientific notation)
-        const std::string SQ     = "\x05\x02";  // square ^2
-        const std::string CB     = "\x05\x03";  // cube ^3
-        const std::string INV    = "\x05\x04";  // inverse ^-1
-        const std::string CBRT   = "\x05\x05";  // cube root
+        const char *const EE     = "\x05\x01";  // EE (scientific notation)
+        const char *const SQ     = "\x05\x02";  // square ^2
+        const char *const CB     = "\x05\x03";  // cube ^3
+        const char *const INV    = "\x05\x04";  // inverse ^-1
+        const char *const CBRT   = "\x05\x05";  // cube root
     }
 
     // 6x6 keypad, 6 layers
@@ -143,8 +145,8 @@ namespace Keypad {
                 Ctrl::SOLV,         // 1: SHIFT
                 "",                 // 2: ALPHA
                 "",                 // 3: SHIFT|ALPHA
-                Ctrl::SOLV,         // 4: CTRL
-                Ctrl::SOLV,         // 5: SHIFT|CTRL
+                Ctrl::STO,          // 4: CTRL
+                Ctrl::RCL,          // 5: SHIFT|CTRL
             },
             // A5: OPTN / MODE / SET
             {
@@ -481,11 +483,69 @@ namespace Keypad {
              *         & 0x04 = ctrl
              */
             uint8_t flg;
+            
             /** @name buf
              *  @brief Input buffer
              */
             std::string buf;
-            Keypad() : flg(0) {}
+
+            /** @name cursor
+             *  @brief Cursor position
+             */
+            int16_t cursor;
+
+            Keypad() : flg(0), cursor(0) {}
+            /** @name press
+             *  @brief Push a key into buffer
+             *  @param r row
+             *  @param c column
+             */
+            Keypad &press(uint8_t r, uint8_t c) {
+                std::string k = getKey(r, c, flg);
+                std::string tmp = "";
+
+                if(k == Spec::SQ) {
+                    tmp += "^";
+                    tmp += Ctrl::BLOCKL;
+                    tmp += "2";
+                    tmp += Ctrl::BLOCKR;
+                    buf.insert(cursor, tmp);
+                    cursor += tmp.size();
+                }
+                if(k == Spec::CB) {
+                    tmp += "^";
+                    tmp += Ctrl::BLOCKL;
+                    tmp += "3";
+                    tmp += Ctrl::BLOCKR;
+                    buf.insert(cursor, tmp);
+                    cursor += tmp.size();
+                }
+                if(k == Spec::INV) {
+                    tmp += "^";
+                    tmp += Ctrl::BLOCKL;
+                    tmp += "-1";
+                    tmp += Ctrl::BLOCKR;
+                    buf.insert(cursor, tmp);
+                    cursor += tmp.size();
+                }
+                if(k == Spec::CBRT) {
+                    tmp += CAS::FuncName::root;
+                    tmp += Ctrl::BLOCKL;
+                    tmp += "3";
+                    tmp += Ctrl::BLOCKR;
+                    tmp += Ctrl::BLOCKL;
+                    tmp += Ctrl::BLOCKR;
+                    buf.insert(cursor, tmp);
+                    cursor += tmp.size() - 1;
+                }
+                if(k == Spec::EE) {
+                    tmp += "*10^";
+                    tmp += Ctrl::BLOCKL;
+                    tmp += Ctrl::BLOCKR;
+                    buf.insert(cursor, tmp);
+                    cursor += tmp.size() - 1;
+                }
+            }
     };
 
 } // namespace Keypad

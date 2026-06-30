@@ -209,7 +209,9 @@ Exptree* parseToken(const std::string& str, size_t& pos) {
             else if (funcName == "e") varName = ConstName::e;
             else if (funcName == "i") varName = ConstName::i;
             else if (funcName == "phi") varName = ConstName::phi;
-            Exptree* node = SimpUtil::makeVariable(varName);
+            Exptree *node;
+            if (funcName == "inf") node = SimpUtil::makeRational(Rational(Intg("inf")));
+            else node = SimpUtil::makeVariable(varName);
             return node;
         }
     }

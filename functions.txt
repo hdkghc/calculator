@@ -1,0 +1,68 @@
+sin [x]
+cos [x]
+tan [x]
+asin [x]
+acos [x]
+atan [x]
+sinh [x]
+cosh [x]
+tanh [x]
+asinh [x]
+acosh [x]
+atanh [x]
+
+ln [x]
+log [a] [b]  ==>  log_b(a)
+log10 [x]
+exp [x]
+sqrt [x]
+root [n] [x] ==>  x^(1/n)
+
+abs [x]
+floor [x]
+ceil [x]
+round [x]
+sign [x]
+max [a] [b] ...
+min [a] [b] ...
+fact [x]
+gcd [x] [y]
+lcm [x] [y]
+mod [x] [y]
+permut [n] [k]
+combin [n] [k]
+
+sum [exp] [i] [from] [to]
+prod [exp] [i] [from] [to]
+defint [exp] [i] [from] [to]
+diff [exp] [x] [n]
+indefint [exp] [i]
+
+polar [x] [y]
+rect [r] [theta]
+
+deg [r]
+rad [d]
+
+randrat
+randint [from] [to]
+
+realpart [z]
+imagpart [z]
+conjg [z]
+arg [z]
+
+vector [n] [a1] [a2] ... [an]
+dot [v1] [v2]
+angle [v1] [v2]
+norm [v]
+det [m]
+matrix [n] [m] [a11] [a12] ... [a1m] [a21] ... [a2m] ... [an1] ... [anm]
+transpose [m]
+eigenval [m]
+eigenvec [m]
+adjoint [m]
+rank [m]
+
+plot2d [exp] [x] [xl] [xr] [y] [yl] [yr]
+plot3d [exp] [x] [xl] [xr] [y] [yl] [yr] [z] [xl] [zr]

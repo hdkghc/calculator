@@ -338,64 +338,170 @@ namespace CAS {
         return node;
     }
 
-    // ========== Max ==========
+    // ========== Min / Max ==========
 
     Exptree* TreeSimplifier::simplifyMax(Exptree* node) {
-        if (node->child.size() < 2) return node;
+        if (node->child.size() < 1) return node;
+        if (node->child.size() == 1) {
+            Exptree* result = SimpUtil::deepCopy(node->child[0]);
+            SimpUtil::freeTree(node);
+            return result;
+        }
 
-        Exptree* a = node->child[0];
-        Exptree* b = node->child[1];
+        // Check for inf: max(anything, inf) = inf
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (SimpUtil::isRational(node->child[i]) && node->child[i]->value.num.isInf()) {
+                SimpUtil::freeTree(node);
+                return SimpUtil::makeRational(Rational(Intg("inf")));
+            }
+        }
 
-        // max(a, b) where both are rational
-        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
-            Exptree* result;
-            if (a->value >= b->value) {
-                result = SimpUtil::deepCopy(a);
-            } else {
-                result = SimpUtil::deepCopy(b);
+        // Check if all children are rational
+        bool allRational = true;
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (!SimpUtil::isRational(node->child[i])) {
+                allRational = false;
+                break;
+            }
+        }
+
+        if (allRational) {
+            Rational maxVal = node->child[0]->value;
+            for (size_t i = 1; i < node->child.size(); ++i) {
+                if (node->child[i]->value > maxVal) {
+                    maxVal = node->child[i]->value;
+                }
             }
             SimpUtil::freeTree(node);
-            return result;
+            return SimpUtil::makeRational(maxVal);
         }
 
-        // max(a, a) = a
-        if (SimpUtil::compareNodes(a, b) == 0) {
-            Exptree* result = SimpUtil::deepCopy(a);
+        // Collect max rational, deduplicate non-rationals
+        Rational maxRational;
+        bool hasRational = false;
+        std::vector<Exptree*> nonRational;
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (SimpUtil::isRational(node->child[i])) {
+                if (!hasRational || node->child[i]->value > maxRational) {
+                    maxRational = node->child[i]->value;
+                    hasRational = true;
+                }
+            } else {
+                bool dup = false;
+                for (size_t j = 0; j < nonRational.size(); ++j) {
+                    if (SimpUtil::compareNodes(node->child[i], nonRational[j]) == 0) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) nonRational.push_back(node->child[i]);
+            }
+        }
+
+        if (nonRational.empty()) {
             SimpUtil::freeTree(node);
-            return result;
+            return SimpUtil::makeRational(maxRational);
         }
 
-        return node;
+        Exptree* result = SimpUtil::makeFunction(FuncName::max);
+        if (hasRational) {
+            result->child.push_back(SimpUtil::makeRational(maxRational));
+        }
+        for (size_t i = 0; i < nonRational.size(); ++i) {
+            result->child.push_back(SimpUtil::deepCopy(nonRational[i]));
+        }
+
+        if (result->child.size() == 1) {
+            Exptree* single = result->child[0];
+            result->child.clear();
+            SimpUtil::freeTree(result);
+            SimpUtil::freeTree(node);
+            return single;
+        }
+
+        SimpUtil::freeTree(node);
+        return result;
     }
 
-    // ========== Min ==========
-
     Exptree* TreeSimplifier::simplifyMin(Exptree* node) {
-        if (node->child.size() < 2) return node;
+        if (node->child.size() < 1) return node;
+        if (node->child.size() == 1) {
+            Exptree* result = SimpUtil::deepCopy(node->child[0]);
+            SimpUtil::freeTree(node);
+            return result;
+        }
 
-        Exptree* a = node->child[0];
-        Exptree* b = node->child[1];
+        // Check for -inf: min(anything, -inf) = -inf
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (SimpUtil::isRational(node->child[i]) && node->child[i]->value.num.isInf() && node->child[i]->value.num.isNeg()) {
+                SimpUtil::freeTree(node);
+                return SimpUtil::makeRational(Rational(Intg("-inf")));
+            }
+        }
 
-        // min(a, b) where both are rational
-        if (SimpUtil::isRational(a) && SimpUtil::isRational(b)) {
-            Exptree* result;
-            if (a->value <= b->value) {
-                result = SimpUtil::deepCopy(a);
-            } else {
-                result = SimpUtil::deepCopy(b);
+        bool allRational = true;
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (!SimpUtil::isRational(node->child[i])) {
+                allRational = false;
+                break;
+            }
+        }
+
+        if (allRational) {
+            Rational minVal = node->child[0]->value;
+            for (size_t i = 1; i < node->child.size(); ++i) {
+                if (node->child[i]->value < minVal) {
+                    minVal = node->child[i]->value;
+                }
             }
             SimpUtil::freeTree(node);
-            return result;
+            return SimpUtil::makeRational(minVal);
         }
 
-        // min(a, a) = a
-        if (SimpUtil::compareNodes(a, b) == 0) {
-            Exptree* result = SimpUtil::deepCopy(a);
+        Rational minRational;
+        bool hasRational = false;
+        std::vector<Exptree*> nonRational;
+        for (size_t i = 0; i < node->child.size(); ++i) {
+            if (SimpUtil::isRational(node->child[i])) {
+                if (!hasRational || node->child[i]->value < minRational) {
+                    minRational = node->child[i]->value;
+                    hasRational = true;
+                }
+            } else {
+                bool dup = false;
+                for (size_t j = 0; j < nonRational.size(); ++j) {
+                    if (SimpUtil::compareNodes(node->child[i], nonRational[j]) == 0) {
+                        dup = true;
+                        break;
+                    }
+                }
+                if (!dup) nonRational.push_back(node->child[i]);
+            }
+        }
+
+        if (nonRational.empty()) {
             SimpUtil::freeTree(node);
-            return result;
+            return SimpUtil::makeRational(minRational);
         }
 
-        return node;
+        Exptree* result = SimpUtil::makeFunction(FuncName::min);
+        if (hasRational) {
+            result->child.push_back(SimpUtil::makeRational(minRational));
+        }
+        for (size_t i = 0; i < nonRational.size(); ++i) {
+            result->child.push_back(SimpUtil::deepCopy(nonRational[i]));
+        }
+
+        if (result->child.size() == 1) {
+            Exptree* single = result->child[0];
+            result->child.clear();
+            SimpUtil::freeTree(result);
+            SimpUtil::freeTree(node);
+            return single;
+        }
+
+        SimpUtil::freeTree(node);
+        return result;
     }
 
     // ========== Permut ==========

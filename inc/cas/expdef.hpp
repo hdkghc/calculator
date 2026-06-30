@@ -124,7 +124,7 @@ namespace CAS {
         const char *const pi        = "\002\001";
         const char *const e         = "\002\002";
         const char *const phi       = "\002\003"; ///< golden ratio
-        const char *const i         = "\002\004"; ///< imaginary unit
+        const char *const i         = "\002\004"; ///< imaginary
 
         // scientific constants
         // Commonly used physical constants
