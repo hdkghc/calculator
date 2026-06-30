@@ -299,6 +299,7 @@ static const char* getDisplayName(const std::string& var) {
     if (var == FuncName::eigenvec)  return "eigenvec";
     if (var == FuncName::adjoint)   return "adjoint";
     if (var == FuncName::rank)      return "rank";
+    if (var == FuncName::defint)    return "dint";
     return var.c_str();
 }
 
