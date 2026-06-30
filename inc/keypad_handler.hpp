@@ -28,12 +28,14 @@
 
 namespace Keypad {
 
-    constexpr uint8_t FLAG_SHIFT  = 0x01;
-    constexpr uint8_t FLAG_ALPHA  = 0x02;
-    constexpr uint8_t FLAG_CTRL   = 0x04;
-    constexpr uint8_t FLAG_LOCK   = 0x08;
-    constexpr uint8_t FLAG_INSERT = 0x10;
+    // ========== Modifier bitmask (stored in m_flags) ==========
+    constexpr uint8_t MASK_SHIFT  = 0x01;
+    constexpr uint8_t MASK_ALPHA  = 0x02;
+    constexpr uint8_t MASK_CTRL   = 0x04;
+    constexpr uint8_t MASK_LOCK   = 0x08;
+    constexpr uint8_t MASK_INSERT = 0x10;
 
+    // ========== Function type ==========
     enum FuncType : int8_t {
         FT_DIGIT = 0,
         FT_VAR_CONST,
@@ -132,73 +134,44 @@ namespace Keypad {
         return unknown;
     }
 
+    // ========== Token utilities ==========
     inline uint8_t tokenLen(char c) {
         uint8_t uc = static_cast<uint8_t>(c);
-        return (uc >= 0x01 && uc <= 0x05) ? 2 : 1;
+        if (uc >= 0x01 && uc <= 0x05) return 3;
+        return 1;
     }
     inline uint8_t isTokenStart(char c) {
         uint8_t uc = static_cast<uint8_t>(c);
         return (uc >= 0x01 && uc <= 0x05) ? 1 : 0;
     }
 
+    // ========== Expression builder ==========
+
     class ExpressionBuilder {
     public:
-        ExpressionBuilder() : m_cursor(0), m_insert(0) {}
+        ExpressionBuilder() : m_cursor(0), m_flags(0) {}
 
-        void setInsert(uint8_t on) { m_insert = on; }
-        uint8_t insert() const { return m_insert; }
         void setExpr(const std::string& e) { m_expr = e; m_cursor = e.size(); }
         const std::string& expr() const { return m_expr; }
         uint16_t cursor() const { return m_cursor; }
-        void setCursor(uint16_t p) { if (p <= m_expr.size()) m_cursor = p; }
+        uint8_t flags() const { return m_flags; }
 
-        // ========== Token-level delete ==========
-        /**
-         *  @brief Delete one token left of cursor.
-         *  @details sin( 被视为一个整体（函数名+左括号），一起删除。
-         */
+        // ========== Delete ==========
         void del() {
             if (m_cursor == 0) return;
             uint16_t p = m_cursor;
-
-            // Check for BLOCKR at cursor-1 — delete matching BLOCKL..BLOCKR block
-            if (p >= 2 && m_expr[p-2] == Ctrl::BLOCKL[0] && m_expr[p-1] == Ctrl::BLOCKL[1]) {
-                // Cursor is after BLOCKL, find BLOCKR and delete whole block
-                uint16_t end = p;
-                while (end < m_expr.size() && !(m_expr[end] == Ctrl::BLOCKR[0] && m_expr[end+1] == Ctrl::BLOCKR[1])) {
-                    end += isTokenStart(m_expr[end]) ? tokenLen(m_expr[end]) : 1;
-                }
-                if (end < m_expr.size()) end += 2;
-                m_expr.erase(p, end - p);
-                return;
-            }
-
-            // Check for function name before '(' — delete func + '(' together
             if (m_expr[p-1] == '(') {
                 uint16_t start = p - 1;
                 while (start > 0) {
                     char c = m_expr[start-1];
-                    if (isTokenStart(c)) { start -= tokenLen(c); }
-                    else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) { start--; }
+                    if (isTokenStart(c)) start -= tokenLen(c);
+                    else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) start--;
                     else break;
                 }
-                if (start < p - 1) {
-                    // Function name found — delete func + '('
-                    m_expr.erase(start, p - start);
-                    m_cursor = start;
-                    return;
-                }
+                if (start < p - 1) { m_expr.erase(start, p - start); m_cursor = start; return; }
             }
-
-            // Default: delete one token
-            if (isTokenStart(m_expr[p-1])) {
-                uint8_t len = tokenLen(m_expr[p-1]);
-                m_expr.erase(p - len, len);
-                m_cursor -= len;
-            } else {
-                m_expr.erase(p - 1, 1);
-                m_cursor--;
-            }
+            if (isTokenStart(m_expr[p-1])) { uint8_t len = tokenLen(m_expr[p-1]); m_expr.erase(p-len, len); m_cursor -= len; }
+            else { m_expr.erase(p-1, 1); m_cursor--; }
         }
 
         void ac() { m_expr.clear(); m_cursor = 0; }
@@ -215,7 +188,7 @@ namespace Keypad {
         }
 
         void insertStr(const std::string& s) {
-            if (m_insert && m_cursor < m_expr.size()) {
+            if ((m_flags & MASK_INSERT) && m_cursor < m_expr.size()) {
                 uint16_t p = m_cursor;
                 uint8_t oldLen = isTokenStart(m_expr[p]) ? tokenLen(m_expr[p]) : 1;
                 m_expr.replace(p, oldLen, s);
@@ -225,22 +198,9 @@ namespace Keypad {
             m_cursor += s.size();
         }
 
-        // ========== Infix binary operator ( + - * / ^ dot ) ==========
-        void pressInfixOp(const std::string& op) {
-            insertStr(op);
-        }
-
-        // ========== Unary prefix with auto parens ==========
-        /**
-         *  @brief Insert sin(, cos(, sqrt(, etc.
-         *  @details Function name + '(' inserted together. DEL removes both.
-         */
-        void pressUnaryPrefix(const std::string& fn) {
-            std::string s = fn + "(";
-            insertStr(s);
-        }
-
-        // ========== Unary postfix ^2 ^3 ^-1 ==========
+        // ========== Handlers ==========
+        void pressInfixOp(const std::string& op)     { insertStr(op); }
+        void pressUnaryPrefix(const std::string& fn) { insertStr(fn + "("); }
         void pressUnaryPostfix(const std::string& spec) {
             if (spec == Spec::SQ)       insertStr("^2");
             else if (spec == Spec::CB)  insertStr("^3");
@@ -248,84 +208,7 @@ namespace Keypad {
             else if (spec == Spec::CBRT) insertStr("cbrt(");
         }
 
-        // ========== Binary function with templates ==========
-        /**
-         *  @brief Insert log_(a)(b) style template using BLOCKL/BLOCKR.
-         *  @details log -> log_[BLOCKL]a[BLOCKR](BLOCKL)b[BLOCKR]
-         *           User sees two input boxes. Cursor placed in first box (a).
-         *           Internal log(2,8) means log_8(2), but user enters log(8,2).
-         *           Here user sees: log[8](2) with 8 in first box, 2 in second.
-         */
-        void pressLogTemplate() {
-            std::string tmpl;
-            tmpl += CAS::FuncName::log;
-            tmpl += "(";
-            tmpl += Ctrl::BLOCKL;  // first input box: base
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ",";
-            tmpl += Ctrl::BLOCKL;  // second input box: argument
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ")";
-            insertStr(tmpl);
-            // Cursor goes to first input box (after BLOCKL, before BLOCKR)
-            m_cursor -= tmpl.size();
-            m_cursor += 2 + 1 + 2; // log + ( + BLOCKL
-        }
-
-        /**
-         *  @brief Insert root[n](x) template
-         */
-        void pressRootTemplate() {
-            std::string tmpl;
-            tmpl += CAS::FuncName::root;
-            tmpl += "(";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ",";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ")";
-            insertStr(tmpl);
-            m_cursor -= tmpl.size();
-            m_cursor += 2 + 1 + 2; // root( + BLOCKL
-        }
-
-        /**
-         *  @brief Insert power ^(base,exp) template with input boxes
-         */
-        void pressPowerTemplate() {
-            std::string tmpl = "^(";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ",";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ")";
-            insertStr(tmpl);
-            m_cursor -= tmpl.size();
-            m_cursor += 2 + 2; // ^( + BLOCKL
-        }
-
-        /**
-         *  @brief Insert fraction template (using internal / but displayed as fraction)
-         */
-        void pressFractionTemplate() {
-            std::string tmpl = "/(";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ",";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ")";
-            insertStr(tmpl);
-            m_cursor -= tmpl.size();
-            m_cursor += 2 + 2; // /( + BLOCKL
-        }
-
-        /**
-         *  @brief Insert indexed template: sum(from,to,exp,var)
-         */
-        void pressIndexed(const std::string& fn, uint8_t nBoxes) {
+        void pressTemplate(const std::string& fn, uint8_t nBoxes) {
             std::string tmpl = fn + "(";
             for (uint8_t i = 0; i < nBoxes; ++i) {
                 if (i > 0) tmpl += ",";
@@ -335,111 +218,108 @@ namespace Keypad {
             tmpl += ")";
             insertStr(tmpl);
             m_cursor -= tmpl.size();
-            m_cursor += fn.size() + 1 + 2; // fn( + BLOCKL
+            m_cursor += fn.size() + 1 + 2;
         }
+
+        void pressVoid(const std::string& fn)      { insertStr(fn + "()"); }
+        void pressMultiArg(const std::string& fn)  { pressTemplate(fn, 1); }
+
+        // ========== Main entry ==========
 
         /**
-         *  @brief Insert multi-arg template: max/min
+         *  @brief Process a key press
+         *  @param row 0-5
+         *  @param col 0-5
+         *  @return 1 if consumed, 0 if empty
          */
-        void pressMultiArg(const std::string& fn) {
-            std::string tmpl = fn + "(";
-            tmpl += Ctrl::BLOCKL;
-            tmpl += Ctrl::BLOCKR;
-            tmpl += ")";
-            insertStr(tmpl);
-            m_cursor -= tmpl.size();
-            m_cursor += fn.size() + 1 + 2; // fn( + BLOCKL
-        }
-
-        // ========== Main entry point ==========
-
-        uint8_t pressKey(uint8_t row, uint8_t col, uint8_t flags) {
-            uint8_t mod = flags & 0x07;
+        uint8_t pressKey(uint8_t row, uint8_t col) {
+            uint8_t mod = m_flags & (MASK_SHIFT | MASK_ALPHA | MASK_CTRL);
             const std::string& key = getKey(row, col, mod);
             if (key.empty()) return 0;
 
-            m_insert = (flags & FLAG_INSERT) ? 1 : 0;
+            // Modifier keys
+            if (key == Ctrl::SHIFT) { m_flags ^= MASK_SHIFT; return 1; }
+            if (key == Ctrl::ALPHA) { m_flags ^= MASK_ALPHA; return 1; }
+            if (key == Ctrl::CTRL)  { m_flags ^= MASK_CTRL;  return 1; }
+            if (key == Ctrl::LOCK)  { m_flags ^= MASK_LOCK;  return 1; }
+            if (key == Ctrl::INS)   { m_flags ^= MASK_INSERT; return 1; }
 
             // Control keys — pass through
             if (key == Ctrl::EXE || key == Ctrl::ON || key == Ctrl::OFF ||
                 key == Ctrl::ABOUT || key == Ctrl::MENU || key == Ctrl::MODE ||
                 key == Ctrl::SET || key == Ctrl::CLR || key == Ctrl::SOLV ||
                 key == Ctrl::CALC || key == Ctrl::CONST || key == Ctrl::CONV ||
-                key == Ctrl::OK || key == Ctrl::LOCK || key == Ctrl::STO ||
-                key == Ctrl::RCL || key == Ctrl::OPTN || key == Ctrl::FMT ||
-                key == Ctrl::BLOCKL || key == Ctrl::BLOCKR ||
+                key == Ctrl::OK || key == Ctrl::STO || key == Ctrl::RCL ||
+                key == Ctrl::OPTN || key == Ctrl::FMT ||
                 key == Ctrl::ZOOM_P || key == Ctrl::ZOOM_M ||
                 key == Ctrl::Z_PLUS || key == Ctrl::Z_MINUS ||
-                key == Ctrl::Y_PLUS || key == Ctrl::Y_MINUS) return 1;
+                key == Ctrl::Y_PLUS || key == Ctrl::Y_MINUS) {
+                goto release;
+            }
 
-            if (key == Ctrl::DEL)     { del(); return 1; }
-            if (key == Ctrl::AC)      { ac(); return 1; }
-            if (key == Ctrl::INS)     { m_insert = !m_insert; return 1; }
-            if (key == Ctrl::X_MINUS) { moveLeft(); return 1; }
-            if (key == Ctrl::X_PLUS)  { moveRight(); return 1; }
+            if (key == Ctrl::DEL)     { del(); goto release; }
+            if (key == Ctrl::AC)      { ac();  goto release; }
+            if (key == Ctrl::X_MINUS) { moveLeft();  goto release; }
+            if (key == Ctrl::X_PLUS)  { moveRight(); goto release; }
 
-            // ASCII digits
-            if (key.size() == 1 && key[0] >= '0' && key[0] <= '9') { insertStr(key); return 1; }
-            if (key == ".")    { insertStr("."); return 1; }
-            if (key == Spec::EE) { insertStr("*10^"); return 1; }
+            // Digits
+            if (key.size() == 1 && key[0] >= '0' && key[0] <= '9') { insertStr(key); goto release; }
+            if (key == ".")    { insertStr(".");    goto release; }
+            if (key == Spec::EE) { insertStr("*10^"); goto release; }
 
-            // Variables and constants
+            // Vars / constants
             if (key == "x" || key == "y" || key == "z" ||
                 key == CAS::ConstName::i || key == CAS::ConstName::e ||
                 key == CAS::ConstName::pi ||
                 key == VarName::Ans || key == VarName::PAns ||
                 key == VarName::theta || key == VarName::lambda ||
-                key == VarName::mu || key == VarName::alpha) { insertStr(key); return 1; }
+                key == VarName::mu || key == VarName::alpha) { insertStr(key); goto release; }
 
-            // Infix binary operators (incl. dot)
+            // Infix ops
             if (key == "+" || key == "-" || key == "*" || key == "/" || key == "^" ||
-                key == CAS::FuncName::dot) { pressInfixOp(key); return 1; }
+                key == CAS::FuncName::dot) { pressInfixOp(key); goto release; }
 
             // Brackets / comma
-            if (key == "(" || key == ")" || key == ",") { insertStr(key); return 1; }
+            if (key == "(" || key == ")" || key == ",") { insertStr(key); goto release; }
 
-            // Postfix specifiers
+            // Postfix
             if (key == Spec::SQ || key == Spec::CB || key == Spec::INV || key == Spec::CBRT) {
-                pressUnaryPostfix(key); return 1;
+                pressUnaryPostfix(key); goto release;
             }
 
-            // Equals
-            if (key == "=") return 1;
+            if (key == "=") goto release;
 
-            // Special template keys
-            if (key == CAS::FuncName::log)   { pressLogTemplate(); return 1; }
-            if (key == CAS::FuncName::root)  { pressRootTemplate(); return 1; }
+            // Special templates
+            if (key == CAS::FuncName::log)  { pressTemplate(CAS::FuncName::log, 2);  goto release; }
+            if (key == CAS::FuncName::root) { pressTemplate(CAS::FuncName::root, 2); goto release; }
 
-            // FACTOR / EXPAND
-            if (key == Ctrl::FACTOR || key == Ctrl::EXPAND) { pressUnaryPrefix(key); return 1; }
+            if (key == Ctrl::FACTOR || key == Ctrl::EXPAND) { pressUnaryPrefix(key); goto release; }
 
-            // Lookup function registry
-            const FuncInfo& fi = lookupFunc(key);
-            if (fi.internal[0] == '\0') { insertStr(key); return 1; }
-
-            switch (fi.type) {
-                case FT_OP_UNARY_PRE:
-                    pressUnaryPrefix(fi.internal); break;
-                case FT_OP_BINARY_FUNC:
-                    pressIndexed(fi.internal, 2); break;
-                case FT_OP_MULTI:
-                    pressMultiArg(fi.internal); break;
-                case FT_OP_VOID:
-                    insertStr(fi.internal + std::string("()")); break;
-                case FT_OP_INDEXED:
-                case FT_OP_GRAPH:
-                case FT_OP_RANDINT:
-                    pressIndexed(fi.internal, fi.numArgs > 0 ? fi.numArgs : 1); break;
-                default:
-                    insertStr(fi.internal); break;
+            // Registry
+            {
+                const FuncInfo& fi = lookupFunc(key);
+                if (fi.internal[0] == '\0') { insertStr(key); goto release; }
+                switch (fi.type) {
+                    case FT_OP_UNARY_PRE:   pressUnaryPrefix(fi.internal); break;
+                    case FT_OP_BINARY_FUNC: pressTemplate(fi.internal, 2); break;
+                    case FT_OP_MULTI:       pressMultiArg(fi.internal);    break;
+                    case FT_OP_VOID:        pressVoid(fi.internal);        break;
+                    case FT_OP_INDEXED:
+                    case FT_OP_GRAPH:
+                    case FT_OP_RANDINT:     pressTemplate(fi.internal, fi.numArgs > 0 ? fi.numArgs : 1); break;
+                    default:                insertStr(fi.internal);        break;
+                }
             }
+
+        release:
+            if (!(m_flags & MASK_LOCK)) m_flags &= ~(MASK_SHIFT | MASK_ALPHA | MASK_CTRL);
             return 1;
         }
 
     private:
         std::string m_expr;
         uint16_t m_cursor;
-        uint8_t m_insert;
+        uint8_t m_flags;
     };
 
 } // namespace Keypad
