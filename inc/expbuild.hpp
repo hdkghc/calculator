@@ -65,7 +65,7 @@ namespace Keypad {
             /** @brief The status flag */
             uint8_t flg;
             /** @brief The cursor position */
-            uint16_t cp;
+            int16_t cp;
         public:
             Expbuild() : flg(0), cp(0) {}
         protected:
@@ -110,6 +110,37 @@ namespace Keypad {
                     flg &= 0xFF & (~M_RCL);
                     flg &= 0xFF & (~M_STO);
                 }
+            }
+            /** @brief Process AC key */
+            void _AC() {
+                exp.clear();
+                cp = 0;
+                flg = 0;
+            }
+            /** @brief Process DEL key */
+            void _DEL() {
+                if(cp < 0 || cp >= exp.size()) return;
+                if(cp == 0 && exp.size() > 0) { // Head, delete the first character
+                    _Move(Ctrl::X_PLUS); // Move right
+                    _DEL(); // and delete it
+                    return;
+                }
+                if((cp - 4 >= 0) && exp[cp - 4] == '\x01') {
+                    /**
+                     * function '\x01??(', listed below:
+                     * sin cos tan asin acos atan ...
+                     * ln log10 exp round sign max min gcd lcm
+                     * polar rect deg rad randint
+                     * realpart imagpart conjg arg
+                     * transpose eigenval eigenvec adjoint rank det
+                    */
+                    exp.erase(cp - 4, 4);
+                    cp -= 4;
+                }
+            }
+            /** @brief Move the cursor */
+            void _Move(std::string k) {
+                ;
             }
     };
 } // namespace Keypad

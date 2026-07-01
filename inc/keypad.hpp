@@ -57,40 +57,40 @@ namespace Keypad {
         const char *const CONV    = "\x03\x14";
         const char *const OK      = "\x03\x15";
         // Graph controls
-        const char *const ZOOM_P  = "\x03\x16";  // Zoom+
-        const char *const ZOOM_M  = "\x03\x17";  // Zoom-
+        const char *const ZOOM_P  = "\x03\x16";  ///< Zoom+
+        const char *const ZOOM_M  = "\x03\x17";  ///< Zoom-
         const char *const FACTOR  = "\x03\x18";
         const char *const EXPAND  = "\x03\x19";
-        const char *const Z_PLUS  = "\x03\x1A";  // Z+
-        const char *const Z_MINUS = "\x03\x1B";  // Z-
-        const char *const Y_PLUS  = "\x03\x1C";  // Y+ (up)
-        const char *const Y_MINUS = "\x03\x1D";  // Y- (down)
-        const char *const X_PLUS  = "\x03\x1E";  // X+ (right)
-        const char *const X_MINUS = "\x03\x1F";  // X- (left)
+        const char *const Z_PLUS  = "\x03\x1A";  ///< Z+
+        const char *const Z_MINUS = "\x03\x1B";  ///< Z-
+        const char *const Y_PLUS  = "\x03\x1C";  ///< Y+ (up)
+        const char *const Y_MINUS = "\x03\x1D";  ///< Y- (down)
+        const char *const X_PLUS  = "\x03\x1E";  ///< X+ (right)
+        const char *const X_MINUS = "\x03\x1F";  ///< X- (left)
         // 
-        const char *const BLOCKL  = "\x03\x20";  // Input block left mark
-        const char *const BLOCKR  = "\x03\x21";  // Input block right mark
+        const char *const BLOCKL  = "\x03\x20";  ///< Input block left mark
+        const char *const BLOCKR  = "\x03\x21";  ///< Input block right mark
         const char *const STO     = "\x03\x22";
         const char *const RCL     = "\x03\x23";
     }
 
     // Variable identifiers
     namespace VarName {
-        const char *const Ans    = "\x04\x01";  // Ans
-        const char *const PAns   = "\x04\x02";  // PreAns
-        const char *const theta  = "\x04\x03";  // theta
-        const char *const lambda = "\x04\x04";  // lambda
-        const char *const mu     = "\x04\x05";  // mu
-        const char *const alpha  = "\x04\x06";  // alpha
+        const char *const Ans    = "\x04\x01";  ///< Ans
+        const char *const PAns   = "\x04\x02";  ///< PreAns
+        const char *const theta  = "\x04\x03";  ///< theta
+        const char *const lambda = "\x04\x04";  ///< lambda
+        const char *const mu     = "\x04\x05";  ///< mu
+        const char *const alpha  = "\x04\x06";  ///< alpha
     }
 
     // Special symbols
     namespace Spec {
-        const char *const EE     = "\x05\x01";  // EE (scientific notation)
-        const char *const SQ     = "\x05\x02";  // square ^2
-        const char *const CB     = "\x05\x03";  // cube ^3
-        const char *const INV    = "\x05\x04";  // inverse ^-1
-        const char *const CBRT   = "\x05\x05";  // cube root
+        const char *const EE     = "\x05\x01";  ///< EE (scientific notation)
+        const char *const SQ     = "\x05\x02";  ///< square ^2
+        const char *const CB     = "\x05\x03";  ///< cube ^3
+        const char *const INV    = "\x05\x04";  ///< inverse ^-1
+        const char *const CBRT   = "\x05\x05";  ///< cube root
     }
 
     // 6x6 keypad, 6 layers
