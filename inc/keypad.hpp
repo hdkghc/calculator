@@ -109,7 +109,7 @@ namespace Keypad {
     // Layer remap table: mod bits 0-7 -> array index 0-5
     constexpr uint8_t layer_index[8] = {0, 1, 2, 3, 4, 5, 2, 3};
 
-    inline const std::string keypad[6][6][6] = {
+    inline const char* const keypad[6][6][6] = {
         // ==================== Row A ====================
         {
             // A1: SHIFT

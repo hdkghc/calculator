@@ -28,36 +28,90 @@
 
 namespace Keypad {
 
-    constexpr uint8_t MASK_SHIFT  = 0x01;
-    constexpr uint8_t MASK_ALPHA  = 0x02;
-    constexpr uint8_t MASK_CTRL   = 0x04;
-    constexpr uint8_t MASK_LOCK   = 0x08;
-    constexpr uint8_t MASK_INSERT = 0x10;
+    constexpr uint8_t M_SHIFT  = 0x01;
+    constexpr uint8_t M_ALPHA  = 0x02;
+    constexpr uint8_t M_CTRL   = 0x04;
+    constexpr uint8_t M_LOCK   = 0x08;
+    constexpr uint8_t M_INSERT = 0x10;
+    constexpr uint8_t M_RCL    = 0x20;
+    constexpr uint8_t M_STO    = 0x40;
 
 
-    constexpr uint8_t BUILD_SUCCESS = 0x00;
-    constexpr uint8_t BUILD_PLOT2D  = 0x01;
-    constexpr uint8_t BUILD_PLOT3D  = 0x02;
-    constexpr uint8_t BUILD_SOLVE   = 0x03;
-    constexpr uint8_t BUILD_CONV    = 0x04;
-    constexpr uint8_t BUILD_CONST   = 0x05;
-    constexpr uint8_t BUILD_EXEC    = 0x06;
-    constexpr uint8_t BUILD_OPTN    = 0x07;
-    constexpr uint8_t BUILD_MENU    = 0x08;
-    constexpr uint8_t BUILD_MODE    = 0x09;
-    constexpr uint8_t BUILD_FMT     = 0x0A;
-    constexpr uint8_t BUILD_ABOUT   = 0x0B;
-    constexpr uint8_t BUILD_SET     = 0x0C;
-    constexpr uint8_t BUILD_CLEAR   = 0x0D;
-    constexpr uint8_t BUILD_CALC    = 0x0E;
-    constexpr uint8_t BUILD_FACTOR  = 0x0F;
-    constexpr uint8_t BUILD_EXPAND  = 0x10;
-    constexpr uint8_t BUILD_OFF     = 0xFE;
+    constexpr uint8_t B_SUCCESS = 0x00;
+    constexpr uint8_t B_PLOT2D  = 0x01;
+    constexpr uint8_t B_PLOT3D  = 0x02;
+    constexpr uint8_t B_SOLVE   = 0x03;
+    constexpr uint8_t B_CONV    = 0x04;
+    constexpr uint8_t B_CONST   = 0x05;
+    constexpr uint8_t B_EXEC    = 0x06;
+    constexpr uint8_t B_OPTN    = 0x07;
+    constexpr uint8_t B_MENU    = 0x08;
+    constexpr uint8_t B_MODE    = 0x09;
+    constexpr uint8_t B_FMT     = 0x0A;
+    constexpr uint8_t B_ABOUT   = 0x0B;
+    constexpr uint8_t B_SET     = 0x0C;
+    constexpr uint8_t B_CLEAR   = 0x0D;
+    constexpr uint8_t B_CALC    = 0x0E;
+    constexpr uint8_t B_FACTOR  = 0x0F;
+    constexpr uint8_t B_EXPAND  = 0x10;
+    constexpr uint8_t B_OFF     = 0xFE;
 
-    constexpr uint8_t BUILD_ERROR   = 0xFF;
+    constexpr uint8_t B_ERROR   = 0xFF;
     
-    
-    
+    class Expbuild {
+        protected:
+            /** @brief The internal expression string */
+            std::string exp;
+            /** @brief The status flag */
+            uint8_t flg;
+            /** @brief The cursor position */
+            uint16_t cp;
+        public:
+            Expbuild() : flg(0), cp(0) {}
+        protected:
+            /** @brief Handle a modifier key press */
+            void _Modifier(std::string k) {
+                if(k == Ctrl::SHIFT) {
+                    flg ^= M_SHIFT;
+                    return;
+                }
+                if(k == Ctrl::ALPHA) {
+                    flg ^= M_ALPHA;
+                    return;
+                }
+                if(k == Ctrl::CTRL) {
+                    flg ^= M_CTRL;
+                    flg &= 0xFF & (~M_LOCK);
+                    return;
+                }
+                if(k == Ctrl::LOCK) {
+                    flg ^= M_LOCK;
+                    return;
+                }
+                if(k == Ctrl::INS) {
+                    flg ^= M_INSERT;
+                    return;
+                }
+                if(k == Ctrl::RCL) {
+                    flg ^= M_RCL;
+                    return;
+                }
+                if(k == Ctrl::STO) {
+                    flg ^= M_STO;
+                    return;
+                }
+            }
+            /** @brief Check invalid status */
+            void _Check() {
+                if((flg & M_LOCK) && !(flg & M_CTRL)) {
+                    flg &= 0xFF & (~M_LOCK);
+                }
+                if((flg & M_RCL) && (flg & M_STO)) {
+                    flg &= 0xFF & (~M_RCL);
+                    flg &= 0xFF & (~M_STO);
+                }
+            }
+    };
 } // namespace Keypad
 
 #endif // _EXPBUILD_HPP_
