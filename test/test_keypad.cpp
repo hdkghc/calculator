@@ -19,7 +19,7 @@
  */
 
 #include "keypad.hpp"
-#include "keypad_handler.hpp"
+#include "expbuild.hpp"
 #include <iostream>
 #include <string>
 #include <cstdint>
@@ -81,6 +81,7 @@ int main() {
         std::cout << "> ";
         std::getline(std::cin, line);
         if (line.empty()) continue;
+        for (auto &c : line) c = toupper(c);
         if (line == "QUIT" || line == "EXIT" || line == "Q") break;
 
         if (line == "DEL")  { builder.del(); printExpr(builder.expr(), builder.cursor()); continue; }
