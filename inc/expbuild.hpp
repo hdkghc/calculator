@@ -167,6 +167,12 @@ namespace Keypad {
                     cp -= 4;
                     return;
                 }
+                if((cp - 3 >= 0) && exp[cp - 3] == '\x01') {
+                    /** 
+                     * like ...\x01??...
+                     * function: fact, dot
+                     */
+                }
                 if((cp - 2 >= 0) && exp[cp - 2] == '\x03') {
                     // The only control keys that can be inserted into the expression are
                     // BLOCKL and BLOCKR
@@ -196,7 +202,8 @@ namespace Keypad {
                                 func == CAS::FuncName::log ||
                                 func == CAS::FuncName::permut ||
                                 func == CAS::FuncName::combin ||
-                                func == CAS::FuncName::randint
+                                func == CAS::FuncName::randint ||
+                                func == CAS::FuncName::randrat
                             ) {
                                 if(func == CAS::FuncName::log) {
                                     // log [|a] [b] === log_b(|a)
@@ -204,7 +211,8 @@ namespace Keypad {
                                     // log [a] [b|] === log_b|(a)
                                     // \x01lg\x03\x20|...\x03\x21\x03\x20...|\x03\x21
                                     //               |--------------------->^
-//                                                       ^~~~---------------|
+
+                                    //                   ^~~~---------------|
                                     // find the second right block          |
                                     size_t _pos = _findRblock(cp - 2); // --|
                                     if (_pos == std::string::npos) {
