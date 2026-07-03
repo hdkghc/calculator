@@ -188,6 +188,12 @@ namespace Keypad {
                                         cp = _pos;
                                     }
                                     return;
+                                } else {
+                                    // root, permutation, combination
+                                    // delete the function and the blocks but save params
+                                    // \x01??\x03\x20|...\x03\x21\x03\x20...\x03\x21
+                                    //     ↓
+                                    // ... ...
                                 }
                             }
                         } else {

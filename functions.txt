@@ -38,6 +38,7 @@ eigenval [m]
 eigenvec [m]
 adjoint [m]
 rank [m]
+randint [from] [to]
 
 abs [x]
 sqrt [x]
@@ -46,7 +47,6 @@ root [n] [x] ==>  x^(1/n)
 log [a] [b]  ==>  log_b(a)
 permut [n] [k]
 combin [n] [k]
-randint [from] [to]
 
 fact [x]
 dot [v1] [v2]
