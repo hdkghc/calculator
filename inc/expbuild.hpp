@@ -54,6 +54,8 @@ namespace Keypad {
     constexpr uint8_t B_CALC    = 0x0E;
     constexpr uint8_t B_FACTOR  = 0x0F;
     constexpr uint8_t B_EXPAND  = 0x10;
+    constexpr uint8_t B_VECTOR  = 0x11;
+    constexpr uint8_t B_MATRIX  = 0x12;
     constexpr uint8_t B_OFF     = 0xFE;
 
     constexpr uint8_t B_ERROR   = 0xFF;
@@ -136,6 +138,66 @@ namespace Keypad {
                     */
                     exp.erase(cp - 4, 4);
                     cp -= 4;
+                    return;
+                }
+                if((cp - 2 >= 0) && exp[cp - 2] == '\x03') {
+                    // The only control keys that can be inserted into the expression are
+                    // BLOCKL and BLOCKR
+                    if(exp[cp - 1] == Ctrl::BLOCKL[1]) {
+                        if(cp - 5 >= 0 && exp[cp - 5] == '\x01') {
+                            // is a function \x01??\x03\x20{|\x03}\x21...
+                            std::string func(exp.substr(cp - 5, 3));
+
+                            // sqrt, abs (single block)
+                            if(func == CAS::FuncName::sqrt || func == CAS::FuncName::abs) {
+                                // single block
+
+                                // find right block, _pos = \x03
+                                size_t _pos = exp.find_first_of(Ctrl::BLOCKR, cp);
+                                if(_pos != std::string::npos) {
+                                    exp.erase(_pos, 2); // erase the right block first
+                                }
+
+                                // then delete the left block and the function
+                                exp.erase(cp - 5, 5);
+                                return;
+                            }
+
+                            // double block
+                            if (
+                                func == CAS::FuncName::root ||
+                                func == CAS::FuncName::log ||
+                                func == CAS::FuncName::permut ||
+                                func == CAS::FuncName::combin ||
+                                func == CAS::FuncName::randint
+                            ) {
+                                if(func == CAS::FuncName::log) {
+                                    // log [|a] [b] === log_b(|a)
+                                    //    ↓
+                                    // log [a] [b|] === log_b|(a)
+                                    // \x01lg\x03\x20|...\x03\x21\x03\x20...|\x03\x21
+                                    //               |--------------------->^
+
+                                    // find the second right block
+                                    size_t _pos = exp.find_first_of(Ctrl::BLOCKR, cp);
+                                    if (_pos == std::string::npos) {
+                                        return;
+                                    }
+                                    _pos = exp.find_first_of(Ctrl::BLOCKR, _pos);
+                                    if (_pos != std::string::npos) {
+                                        cp = _pos;
+                                    }
+                                    return;
+                                }
+                            }
+                        } else {
+                            // a single block
+                        }
+                    }
+                    if(exp[cp - 1] == Ctrl::BLOCKR[1]) {
+                        _Move(Ctrl::X_MINUS); // Move left
+                        return;
+                    }
                 }
             }
             /** @brief Move the cursor */
