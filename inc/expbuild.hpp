@@ -119,6 +119,33 @@ namespace Keypad {
                 cp = 0;
                 flg = 0;
             }
+
+            /** 
+             * @brief find the right block 
+             * @param lpos the position of the left block's \x03
+             */
+            size_t _findRblock(size_t lpos) {
+                uint16_t lCnt = 0;
+                for(size_t i = lpos; i < exp.size() - 1; ++i) {
+                    if(exp[i] == '\x03') {
+                        // is a control (block)
+                        if(exp[i + 1] == Ctrl::BLOCKL[1]) {
+                            // left block
+                            ++lCnt;
+                        } else if(exp[i + 1] == Ctrl::BLOCKR[1]) {
+                            // right block
+                            --lCnt;
+                        }
+                    }
+                    if(!lCnt) {
+                        // Perfect!
+                        return i; // return the position of the '\x03' mark
+                    }
+                }
+                // cannot find
+                return std::string::npos;
+            }
+
             /** @brief Process DEL key */
             void _DEL() {
                 if(cp < 0 || cp >= exp.size()) return;
@@ -153,7 +180,7 @@ namespace Keypad {
                                 // single block
 
                                 // find right block, _pos = \x03
-                                size_t _pos = exp.find_first_of(Ctrl::BLOCKR, cp);
+                                size_t _pos = _findRblock(cp - 2);
                                 if(_pos != std::string::npos) {
                                     exp.erase(_pos, 2); // erase the right block first
                                 }
@@ -177,13 +204,13 @@ namespace Keypad {
                                     // log [a] [b|] === log_b|(a)
                                     // \x01lg\x03\x20|...\x03\x21\x03\x20...|\x03\x21
                                     //               |--------------------->^
-
-                                    // find the second right block
-                                    size_t _pos = exp.find_first_of(Ctrl::BLOCKR, cp);
+//                                                       ^~~~---------------|
+                                    // find the second right block          |
+                                    size_t _pos = _findRblock(cp - 2); // --|
                                     if (_pos == std::string::npos) {
                                         return;
                                     }
-                                    _pos = exp.find_first_of(Ctrl::BLOCKR, _pos);
+                                    _pos = _findRblock(_pos + 2);
                                     if (_pos != std::string::npos) {
                                         cp = _pos;
                                     }
@@ -194,6 +221,8 @@ namespace Keypad {
                                     // \x01??\x03\x20|...\x03\x21\x03\x20...\x03\x21
                                     //     ↓
                                     // ... ...
+
+
                                 }
                             }
                         } else {
