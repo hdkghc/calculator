@@ -121,7 +121,7 @@ namespace Keypad {
             }
 
             /** 
-             * @brief find the right block 
+             * @brief find the right block matches the lblock
              * @param lpos the position of the left block's \x03
              */
             size_t _findRblock(size_t lpos) {
@@ -219,10 +219,26 @@ namespace Keypad {
                                     // root, permutation, combination
                                     // delete the function and the blocks but save params
                                     // \x01??\x03\x20|...\x03\x21\x03\x20...\x03\x21
-                                    //     ↓
-                                    // ... ...
+                                    //     ↓       ↑       ↑                  ↑
+                                    // ... ... (cp - 1)  pos[0]             pos[1]
 
-
+                                    size_t _pos[2]{0};
+                                    _pos[0] = _findRblock(cp - 2);
+                                    if(_pos[0] == std::string::npos) {
+                                        // no matching rblock, exit
+                                        return;
+                                    }
+                                    // the second input block
+                                    _pos[1] = _findRblock(_pos[0] + 2);
+                                    if(_pos[1] != std::string::npos) {
+                                        // erase
+                                        // 2nd rblock
+                                        exp.erase(_pos[1], 2);
+                                        // 1st rblock & 2nd lblock
+                                        exp.erase(_pos[0], 4);
+                                        // function & 1st lblock
+                                        exp.erase(cp - 5, 5);
+                                    }
                                 }
                             }
                         } else {
