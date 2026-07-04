@@ -207,6 +207,8 @@ namespace Keypad {
                     // The only control keys that can be inserted into the expression are
                     // BLOCKL and BLOCKR
                     if(exp[cp - 1] == Ctrl::BLOCKL[1]) {
+                        // delete a left block...
+                        
                         if(cp - 5 >= 0 && exp[cp - 5] == '\x01') {
                             // is a function \x01??\x03\x20{|\x03}\x21...
                             std::string func(exp.substr(cp - 5, 3));
@@ -315,6 +317,12 @@ namespace Keypad {
                             }
                         } else {
                             // a single block
+                            size_t _pos = _findRblock(cp - 2);
+                            if(_pos != std::string::npos) {
+                                exp.erase(_pos, 2);
+                                exp.erase(cp - 2, 2);
+                            }
+                            return;
                         }
                     }
                     if(exp[cp - 1] == Ctrl::BLOCKR[1]) {
