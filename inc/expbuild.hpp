@@ -146,6 +146,32 @@ namespace Keypad {
                 return std::string::npos;
             }
 
+            /** 
+             * @brief find the left block matches the rblock
+             * @param rpos the position of the right block's \x03
+             */
+            size_t _findLblock(size_t rpos) {
+                uint16_t rCnt = 0;
+                for(size_t i = rpos + 1; i > 0; --i) {
+                    if(exp[i - 1] == '\x03') {
+                        // is a control (block)
+                        if(exp[i] == Ctrl::BLOCKL[1]) {
+                            // left block
+                            --rCnt;
+                        } else if(exp[i] == Ctrl::BLOCKR[1]) {
+                            // right block
+                            ++rCnt;
+                        }
+                    }
+                    if(!rCnt) {
+                        // Perfect!
+                        return i; // return the position of the '\x03' mark
+                    }
+                }
+                // cannot find
+                return std::string::npos;
+            }
+
             /** @brief Process DEL key */
             void _DEL() {
                 if(cp < 0 || cp >= exp.size()) return;
@@ -170,8 +196,12 @@ namespace Keypad {
                 if((cp - 3 >= 0) && exp[cp - 3] == '\x01') {
                     /** 
                      * like ...\x01??...
-                     * function: fact, dot
+                     * function: fact, dot, estx1, estx2, esty,
+                     *           band, bor, bxor, bnot, blshift, brshift, bxnor, bnand, bnor
                      */
+                    exp.erase(cp - 3, 3);
+                    cp -= 3;
+                    return;
                 }
                 if((cp - 2 >= 0) && exp[cp - 2] == '\x03') {
                     // The only control keys that can be inserted into the expression are
@@ -248,6 +278,40 @@ namespace Keypad {
                                         exp.erase(cp - 5, 5);
                                     }
                                 }
+                            }
+
+                            // multi block
+                            if (
+                                func == CAS::FuncName::sum ||
+                                func == CAS::FuncName::prod ||
+                                func == CAS::FuncName::defint ||
+                                func == CAS::FuncName::diff ||
+                                func == CAS::FuncName::indefint
+                            ) {
+                                // \x01??\x03\x20|...\x03\x21\x03\x20...\x03\x21\x03\x20...\x03\x21\x03\x20...\x03\x21
+                                //               cp   0                   1                  2                  3 
+                                size_t _pos[2]{0};
+                                _pos[0] = _findRblock(cp - 2);
+                                if(_pos[0] == std::string::npos) {
+                                    return;
+                                }
+                                _pos[1] = _findRblock(_pos[0] + 2); ///< position "1"
+                                if(_pos[1] == std::string::npos) {
+                                    return;
+                                }
+                                if(func != CAS::FuncName::diff && func != CAS::FuncName::indefint) {
+                                    _pos[1] = _findRblock(_pos[1] + 2); ///< position "2"
+                                    if(_pos[1] == std::string::npos) {
+                                        return;
+                                    }
+                                    _pos[1] = _findRblock(_pos[1] + 2); ///< position "3"
+                                    if(_pos[1] == std::string::npos) {
+                                        return;
+                                    }
+                                }
+                                exp.erase(_pos[0], _pos[1] - _pos[0] + 2);
+                                exp.erase(cp - 5, 5);
+                                return;
                             }
                         } else {
                             // a single block

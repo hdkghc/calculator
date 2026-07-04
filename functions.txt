@@ -53,15 +53,15 @@ permut [n] [k]
 combin [n] [k]
 
 // ...\x01??...
-fact [x]
-dot [v1] [v2]
+[x] fact
+[v1] dot [v2]
 
 
 sum [exp] [i] [from] [to]
 prod [exp] [i] [from] [to]
-defint [exp] [i] [from] [to]
-diff [exp] [x] [n]
-indefint [exp] [i]
+defint [exp] [t] [from] [to]
+diff [exp] [x]
+indefint [exp] [t]
 
 vector [n] [a1] [a2] ... [an]
 matrix [n] [m] [a11] [a12] ... [a1m] [a21] ... [a2m] ... [an1] ... [anm]
