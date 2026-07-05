@@ -317,7 +317,33 @@ namespace Keypad {
                             }
                         } else {
                             // a single block
-                            size_t _pos = _findRblock(cp - 2);
+                            size_t _pos = cp;
+                            uint8_t is_func = false;
+                            while(_pos - 4 >= 0 && exp[_pos - 4] == '\x03' && exp[_pos - 3] == Ctrl::BLOCKR[1]) {
+                                // ][|
+                                _pos = _findLblock(_pos - 4);
+                                if(_pos - 3 >= 0 && exp[_pos - 3] == '\x01') {
+                                    is_func = true;
+                                    break;
+                                }
+                            }
+                            if(is_func) {
+                                if(exp.substr(_pos - 3, 3) == CAS::FuncName::log) {
+                                    // Special : leave num 1
+                                    //                ↓
+                                    // \x01lg\x03\x20...\x03\x21\x03\x20...\x03\x21
+                                    //       _pos     _posi[0]         cp _posi[1]
+                                    size_t _posi[2]{_findRblock(_pos)};
+                                    _posi[1] = _findRblock(_posi[0] + 2);
+
+                                    exp.erase(_posi[0], _posi[1] - _posi[0] + 2);
+                                    exp.erase(_pos - 3, 5);
+                                } else {
+                                    // Move left
+                                    _Move(Ctrl::X_MINUS);
+                                }
+                            }
+                            _pos = _findRblock(cp - 2);
                             if(_pos != std::string::npos) {
                                 exp.erase(_pos, 2);
                                 exp.erase(cp - 2, 2);
