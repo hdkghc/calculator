@@ -66,5 +66,6 @@ indefint [exp] [t]
 vector [n] [a1] [a2] ... [an]
 matrix [n] [m] [a11] [a12] ... [a1m] [a21] ... [a2m] ... [an1] ... [anm]
 
+// Interactive
 plot2d [exp] [x] [xl] [xr] [y] [yl] [yr]
 plot3d [exp] [x] [xl] [xr] [y] [yl] [yr] [z] [xl] [zr]
