@@ -200,6 +200,126 @@ namespace CAS {
         const char *const Func      = "func";
         const char *const Call      = "call";
     }
+    namespace ConvName {
+        // length
+        const char *const pc_m      = "\004\001"; ///< parsec               to meter
+        const char *const m_pc      = "\004\002"; ///< meter                to parsec
+        const char *const ly_m      = "\004\003"; ///< light-year           to meter
+        const char *const m_ly      = "\004\004"; ///< meter                to light-year
+        const char *const au_m      = "\004\005"; ///< astronomical unit    to meter
+        const char *const m_au      = "\004\006"; ///< meter                to astronomical unit
+        const char *const U_m       = "\004\007"; ///< rack unit            to meter
+        const char *const m_U       = "\004\010"; ///< meter                to rack unit
+        const char *const nmi_m     = "\004\011"; ///< nautical mile        to meter
+        const char *const m_nmi     = "\004\012"; ///< meter                to nautical mile
+        const char *const mi_m      = "\004\013"; ///< mile                 to meter
+        const char *const m_mi      = "\004\014"; ///< meter                to mile
+        const char *const cb_m      = "\004\015"; ///< cable                to meter
+        const char *const m_cb      = "\004\016"; ///< meter                to cable
+        const char *const ftm_m     = "\004\020"; ///< fathom               to meter
+        const char *const m_ftm     = "\004\021"; ///< meter                to fathom
+        const char *const yd_m      = "\004\022"; ///< yard                 to meter
+        const char *const m_yd      = "\004\023"; ///< meter                to yard
+        const char *const ft_m      = "\004\024"; ///< feet                 to meter
+        const char *const m_ft      = "\004\025"; ///< meter                to feet
+        const char *const in_m      = "\004\026"; ///< inch                 to meter
+        const char *const m_in      = "\004\030"; ///< meter                to inch
+        const char *const pt_m      = "\004\031"; ///< point                to meter
+        const char *const m_pt      = "\004\032"; ///< meter                to point
+
+        // area
+        const char *const acre_sqm  = "\004\040"; ///< acre                 to square meter
+        const char *const sqm_acre  = "\004\041"; ///< aquare meter         to acre
+        const char *const sqft_sqm  = "\004\042"; ///< square feet          to square meter
+        const char *const sqm_sqft  = "\004\043"; ///< square meter         to square feet
+
+        // volume
+        const char *const galus_L   = "\004\050"; ///< gal(US)              to litre
+        const char *const L_galus   = "\004\051"; ///< litre                to gal(US)
+        const char *const galuk_L   = "\004\052"; ///< gal(UK)              to liter
+        const char *const L_galuk   = "\004\053"; ///< litre                to gal(UK)
+        const char *const L_cbm     = "\004\054"; ///< litre                to litre
+        const char *const cbm_L     = "\004\055"; ///< cube meter           to litre
+
+        // mass
+        const char *const lb_kg     = "\004\060";
+        const char *const kg_lb     = "\004\061";
+        const char *const oz_kg     = "\004\062";
+        const char *const kg_oz     = "\004\063";
+        const char *const ozt_kg    = "\004\064";
+        const char *const kg_ozt    = "\004\065";
+        const char *const st_kg     = "\004\066";
+        const char *const kg_st     = "\004\067";
+
+        // velocity
+        const char *const kn_mps    = "\004\070"; ///< knot                 to meter per sec
+        const char *const mps_kn    = "\004\071";
+        const char *const mps_kph   = "\004\072"; ///< meter per sec        to kilometer per hour
+        const char *const kph_mps   = "\004\073";
+
+        // temperature
+        const char *const C_K       = "\004\100";
+        const char *const K_C       = "\004\101";
+        const char *const F_K       = "\004\102";
+        const char *const K_F       = "\004\103";
+        const char *const R_K       = "\004\104";
+        const char *const K_R       = "\004\105";
+
+        // energy
+        const char *const BTU_J     = "\004\110";
+        const char *const J_BTU     = "\004\111";
+        const char *const cal_J     = "\004\112";
+        const char *const J_cal     = "\004\113";
+        const char *const erg_J     = "\004\114";
+        const char *const J_erg     = "\004\115";
+        const char *const eV_J      = "\004\116";
+        const char *const J_eV      = "\004\117";
+        const char *const ftlb_J    = "\004\120";
+        const char *const J_ftlb    = "\004\121";
+        const char *const kgfm_J    = "\004\122";
+        const char *const J_kgfm    = "\004\123";
+
+        // force & pressure
+        const char *const N_kgf     = "\004\130";
+        const char *const kgf_N     = "\004\131";
+        const char *const atm_Pa    = "\004\132";
+        const char *const Pa_atm    = "\004\133";
+        const char *const mmHg_Pa   = "\004\134";
+        const char *const Pa_mmHg   = "\004\135";
+        const char *const mmH2O_Pa  = "\004\136";
+        const char *const Pa_mmH2O  = "\004\137";
+
+        // power
+        const char *const hp_kW     = "\004\140";
+        const char *const kW_hp     = "\004\141";
+    }
+
+    namespace EngUnit {
+        const char *const Quetta    = "*10^30";
+        const char *const Ronna     = "*10^27";
+        const char *const Yotta     = "*10^24";
+        const char *const Zetta     = "*10^21";
+        const char *const Exa       = "*10^18";
+        const char *const Peta      = "*10^15";
+        const char *const Tera      = "*10^12";
+        const char *const Giga      = "*10^9";
+        const char *const Mega      = "*10^6";
+        const char *const kilo      = "*10^3";
+        const char *const hecto     = "*10^2";
+        const char *const deka      = "*10";
+        const char *const deci      = "*10^(-1)";
+        const char *const centi     = "*10^(-2)";
+        const char *const milli     = "*10^(-3)";
+        const char *const micro     = "*10^(-6)";
+        const char *const nano      = "*10^(-9)";
+        const char *const pico      = "*10^(-12)";
+        const char *const femto     = "*10^(-15)";
+        const char *const atto      = "*10^(-18)";
+        const char *const zepto     = "*10^(-21)";
+        const char *const yocto     = "*10^(-24)";
+        const char *const ronto     = "*10^(-27)";
+        const char *const quecto    = "*10^(-30)";
+    }
 } // namespace CAS
 
 #endif // _CAS_EXPDEF_HPP_
