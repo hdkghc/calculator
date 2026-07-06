@@ -176,13 +176,40 @@ namespace Keypad {
                 return std::string::npos;
             }
 
+            /** 
+             * @brief Get the function the block belongs to 
+             * @param _pos the position of the block's \x03
+             * @return the function name, or empty string if not found
+             */
+            std::string _getFunc(size_t _pos) {
+                if(_pos < 0 || exp[_pos] != '\x03') {
+                    // not a block
+                    return std::string();
+                }
+                if(_pos + 1 >= exp.size()) {
+                    return std::string();
+                }
+                if(exp[_pos + 1] == Ctrl::BLOCKL[1]) {
+                    // is a left block, do nothing
+                } else {
+                    // is a right block
+                    _pos = _findLblock(_pos);
+                }
+                while(_pos - 2 >= 0 && exp[_pos - 2] == '\x03' && exp[_pos - 1] == Ctrl::BLOCKR[1]) {
+                    _pos = _findLblock(_pos - 2);
+                    if(_pos - 3 >= 0 && exp[_pos - 3] == '\x01') {
+                        return exp.substr(_pos - 3, 3);
+                    }
+                }
+                return std::string();
+            }
+
             /** @brief Process DEL key */
             uint8_t _DEL() {
                 if(exp.size() == 0) return B_ERROR;
-                if(cp < 0 || cp >= exp.size()) return B_ERROR;
+                if(cp < 0 || cp > exp.size()) return B_ERROR;
                 if(cp == 0 && exp.size() > 0) { // Head, delete the first character
-                    _Move(Ctrl::X_PLUS); // Move right
-                    return _DEL(); // and delete it
+                    return _Move(Ctrl::X_PLUS) == B_ERROR ? B_ERROR : _DEL(); // Move right and delete it
                 }
                 if((cp - 4 >= 0) && exp[cp - 4] == '\x01') {
                     /**
@@ -231,6 +258,7 @@ namespace Keypad {
                                 exp.erase(_pos, 2); 
                                 // then delete the left block and the function
                                 exp.erase(cp - 5, 5);
+                                cp -= 5;
                                 return B_SUCCESS;
                             }
 
@@ -283,6 +311,7 @@ namespace Keypad {
                                         exp.erase(_pos[0], 4);
                                         // function & 1st lblock
                                         exp.erase(cp - 5, 5);
+                                        cp -= 5;
                                         return B_SUCCESS;
                                     }
                                     return B_ERROR;
@@ -320,32 +349,33 @@ namespace Keypad {
                                 }
                                 exp.erase(_pos[0], _pos[1] - _pos[0] + 2);
                                 exp.erase(cp - 5, 5);
+                                cp -= 5;
                                 return B_SUCCESS;
                             }
                         } else {
                             // a single block
                             size_t _pos = cp;
-                            uint8_t is_func = false;
-                            while(_pos - 4 >= 0 && exp[_pos - 4] == '\x03' && exp[_pos - 3] == Ctrl::BLOCKR[1]) {
-                                // ][|
-                                _pos = _findLblock(_pos - 4);
-                                if(_pos - 3 >= 0 && exp[_pos - 3] == '\x01') {
-                                    is_func = true;
-                                    break;
-                                }
-                            }
-                            if(is_func) {
-                                std::string func(exp.substr(_pos - 3, 3));
+                            std::string func = _getFunc(_pos - 2);
+                            if(!func.empty()) {
                                 if(func == CAS::FuncName::log) {
                                     // Special : leave num 1
                                     //                ↓
                                     // \x01lg\x03\x20...\x03\x21\x03\x20...\x03\x21
                                     //       _pos     _posi[0]         cp _posi[1]
                                     size_t _posi[2]{_findRblock(_pos)};
+                                    if(_posi[0] == std::string::npos) {
+                                        return B_ERROR;
+                                    }
+
                                     _posi[1] = _findRblock(_posi[0] + 2);
+                                    if(_posi[1] == std::string::npos) {
+                                        return B_ERROR;
+                                    }
 
                                     exp.erase(_posi[0], _posi[1] - _posi[0] + 2);
                                     exp.erase(_pos - 3, 5);
+                                    cp = _pos - 3;
+                                    return B_SUCCESS;
                                 } else if(func == CAS::FuncName::vector) {
                                     return B_VECEDT;
                                 } else if(func == CAS::FuncName::matrix) {
@@ -355,24 +385,41 @@ namespace Keypad {
                                     _Move(Ctrl::X_MINUS);
                                     return B_SUCCESS;
                                 }
+                            } else {
+                                // not a function, delete the block
+                                _pos = _findRblock(cp - 2);
+                                if(_pos != std::string::npos) {
+                                    // delete rblock
+                                    exp.erase(_pos, 2);
+                                    // delete lblock
+                                    exp.erase(cp - 2, 2);
+                                    cp -= 2;
+                                    return B_SUCCESS;
+                                }
+                                return B_ERROR;
                             }
-                            _pos = _findRblock(cp - 2);
-                            if(_pos != std::string::npos) {
-                                exp.erase(_pos, 2);
-                                exp.erase(cp - 2, 2);
-                                return B_SUCCESS;
-                            }
-                            return B_ERROR;
                         }
                     }
                     if(exp[cp - 1] == Ctrl::BLOCKR[1]) {
+                        std::string func = _getFunc(cp - 2);
+                        if(func == CAS::FuncName::vector) {
+                            return B_VECEDT;
+                        } else if(func == CAS::FuncName::matrix) {
+                            return B_MATEDT;
+                        }
                         _Move(Ctrl::X_MINUS); // Move left
                         return B_SUCCESS;
                     }
                 }
+                if((cp - 2 >= 0) && exp[cp - 2] == '\x02') {
+                    // constant, \x02\x??
+                    exp.erase(cp - 2, 2);
+                    cp -= 2;
+                    return B_SUCCESS;
+                }
             }
             /** @brief Move the cursor */
-            void _Move(std::string k) {
+            uint8_t _Move(std::string k) {
                 ;
             }
     };
