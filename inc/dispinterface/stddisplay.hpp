@@ -63,8 +63,9 @@ extern "C" {
 #define ST7735S_MADCTL_BGR 0x08 ///< BGR color filter panel
 
 // ==================== TFT Display Parameters ====================
-#define TFT_WIDTH        128  ///< Display width in pixels
-#define TFT_HEIGHT       160  ///< Display height in pixels
+// Landscape: MV swaps X/Y, so display is 160x128
+#define TFT_WIDTH        160  ///< Display width in pixels (landscape)
+#define TFT_HEIGHT       128  ///< Display height in pixels (landscape)
 #define TFT_COLOR_RGB565 0x05 ///< 16-bit RGB565 color mode value
 
 // ==================== Font Structure ====================
@@ -168,9 +169,9 @@ namespace Display {
         // 14. Set pixel format to 16-bit RGB565
         0x02, ST7735S_COLMOD, 0x05,
 
-        // 15. Memory access control: BGR + offsets for red tab
-        // 0xD8 for rotation 0: MX | MV | MY | BGR with xoffset=2, yoffset=3
-        0x02, ST7735S_MADCTL, ST7735S_MADCTL_MX | ST7735S_MADCTL_MY | ST7735S_MADCTL_RGB,
+        // 15. Memory access control: Landscape mode
+        // MV | MX | RGB: Landscape with USB on left side
+        0x02, ST7735S_MADCTL, ST7735S_MADCTL_MV | ST7735S_MADCTL_MX | ST7735S_MADCTL_RGB,
 
         // 16. Normal display mode on
         0x01, ST7735S_NORON,
@@ -184,7 +185,7 @@ namespace Display {
      * @brief Driver class for ST7735-based TFT displays (Red Tab variant)
      * 
      * Provides low-level display control for the 1.8" 128x160 ST7735 TFT
-     * LCD module with red PCB.
+     * LCD module with red PCB, configured for landscape orientation.
      * 
      * Default pinout:
      * - BLK (backlight): GPIO 22
@@ -204,13 +205,12 @@ namespace Display {
         uint8_t SCL;     ///< SPI clock pin
         spi_inst_t *SPI; ///< SPI hardware instance
 
-        // Red tab ST7735 requires offsets because the internal RAM is 132x162
-        // but the visible area is only 128x160
+        // Red tab ST7735 requires no offset for this configuration
         static const uint8_t X_OFFSET = 0; ///< Column offset for red tab
         static const uint8_t Y_OFFSET = 0; ///< Row offset for red tab
 
         /**
-         * @brief Set the display memory write window with red tab offsets
+         * @brief Set the display memory write window
          * 
          * @param x1 Start column address (0 to TFT_WIDTH-1)
          * @param y1 Start row address (0 to TFT_HEIGHT-1)
@@ -221,7 +221,7 @@ namespace Display {
             uint8_t buf[4];
             cs_select(CS);
 
-            // Set column address (with offset)
+            // Set column address
             gpio_put(DC, 0);
             uint8_t cmd = ST7735S_CASET;
             spi_write_blocking(SPI, &cmd, 1);
@@ -232,7 +232,7 @@ namespace Display {
             buf[3] = x2 + X_OFFSET;
             spi_write_blocking(SPI, buf, 4);
 
-            // Set row address (with offset)
+            // Set row address
             gpio_put(DC, 0);
             cmd = ST7735S_RASET;
             spi_write_blocking(SPI, &cmd, 1);
@@ -277,10 +277,10 @@ namespace Display {
             {}
 
         /**
-         * @brief Initialize GPIO pins and SPI peripheral for TFT communication
+         * @brief Initialize GPIO pins and SPI peripheral
          */
         void InitPin() {
-            spi_init(SPI, 4000000); // Start with 4MHz like Arduino library
+            spi_init(SPI, 20000000); // 20MHz works fine now
             gpio_set_function(SDA, GPIO_FUNC_SPI);
             gpio_set_function(SCL, GPIO_FUNC_SPI);
             gpio_init(BLK);
@@ -438,16 +438,17 @@ namespace Display {
          * @brief Draw a single scaled character using a GFX font
          */
         void DrawChar(uint8_t x, uint8_t y, char c, const GFXfont *font, 
-                      uint8_t scale, uint16_t color) {
+                    uint8_t scale, uint16_t color) {
             if (!font || c < font->first || c > font->last) return;
 
             GFXglyph glyph = font->glyph[c - font->first];
-            uint16_t bo = glyph.bitmapOffset;
+            uint16_t bo = glyph.bitmapOffset; // Byte offset into bitmap array
             uint8_t w = glyph.width;
             uint8_t h = glyph.height;
+            uint8_t bytes_per_row = (w + 7) / 8; // Bytes per row in the glyph bitmap
             
-            int8_t glyph_x = x + glyph.xOffset * scale;
-            int8_t glyph_y = y + glyph.yOffset * scale;
+            int16_t glyph_x = x + glyph.xOffset * scale;
+            int16_t glyph_y = y + glyph.yOffset * scale;
             uint8_t scaled_w = w * scale;
             uint8_t scaled_h = h * scale;
 
@@ -469,16 +470,17 @@ namespace Display {
 
             for (uint8_t dy = 0; dy < h; dy++) {
                 for (uint8_t sy = 0; sy < scale; sy++) {
-                    uint8_t actual_y = glyph_y + dy * scale + sy;
+                    int16_t actual_y = glyph_y + dy * scale + sy;
                     if (actual_y < y1 || actual_y > y2) continue;
                     
                     for (uint8_t dx = 0; dx < w; dx++) {
-                        uint16_t bit_idx = bo * 8 + dy * w + dx;
-                        uint8_t byte_val = font->bitmap[bit_idx / 8];
-                        bool set = (byte_val >> (7 - (bit_idx % 8))) & 0x01;
+                        // Byte index = base offset + row * bytes_per_row + column byte
+                        uint16_t byte_idx = bo + dy * bytes_per_row + (dx / 8);
+                        uint8_t bit_pos = 7 - (dx % 8);
+                        bool set = (font->bitmap[byte_idx] >> bit_pos) & 0x01;
                         
                         for (uint8_t sx = 0; sx < scale; sx++) {
-                            uint8_t actual_x = glyph_x + dx * scale + sx;
+                            int16_t actual_x = glyph_x + dx * scale + sx;
                             if (actual_x < x1 || actual_x > x2) continue;
                             spi_write_blocking(SPI, set ? px : blank, 2);
                         }
@@ -511,7 +513,7 @@ namespace Display {
                 DrawChar(cursor_x, cursor_y, c, font, scale, color);
 
                 uint16_t idx = c - font->first;
-                if (idx < (font->last - font->first + 1)) {
+                if (idx <= (font->last - font->first)) {
                     cursor_x += font->glyph[idx].xAdvance * scale;
                 }
             }

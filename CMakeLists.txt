@@ -84,6 +84,7 @@ set_target_properties(${PROJECT_NAME} PROPERTIES SUFFIX ".elf")
 target_link_libraries(${PROJECT_NAME}
     pico_stdlib
     hardware_spi
+    hardware_i2c
     # st7735
 )
 

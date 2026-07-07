@@ -470,7 +470,7 @@ namespace Keypad {
      * ALPHA|CTRL (6) and SHIFT|ALPHA|CTRL (7) are treated as ALPHA-lock,
      * mapping to the ALPHA and SHIFT|ALPHA layers respectively.
      */
-    inline const std::string& getKey(int row, int col, uint8_t mod) {
+    inline const std::string& getKey(uint8_t row, uint8_t col, uint8_t mod) {
         return keypad[row][col][layer_index[mod & 0x7]];
     }
 } // namespace Keypad
