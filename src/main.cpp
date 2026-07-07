@@ -26,7 +26,7 @@ extern "C" {
 }
 // #include "fonts/CW.h"
 // #include "fonts/CWMath.h"
-#include "display.hpp"
+#include "dispinterface/stddisplay.hpp"
 
 using namespace std;
 
