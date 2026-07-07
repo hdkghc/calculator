@@ -30,7 +30,10 @@ extern "C" {
 #include "keypadio.hpp"
 #include "../fonts/CW.h"
 
+#include "expbuild.hpp"
+
 using namespace std;
+using namespace Keypad;
 
 int main() {
     // LED
@@ -49,6 +52,8 @@ int main() {
 
     char buf[32];
 
+    Expbuild expb;
+
     while (true) {
         uint8_t row, col;
         if (keypad.read(row, col)) {
@@ -56,11 +61,17 @@ int main() {
 
             display.ClearScreen(0x0000);
 
-            snprintf(buf, sizeof(buf), "R:%d C:%d", row, col);
-            display.DrawText(10, 40, &ClassWiz_CW_Display_Regular12pt, 1,
-                            buf, 0xFFFF);
+            // snprintf(buf, sizeof(buf), "R:%d C:%d", row, col);
+            // display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
+            //                 buf, 0xFFFF);
 
-            sleep_ms(200);
+            expb.press(row, col);
+            gpio_put(PICO_DEFAULT_LED_PIN, 0);
+            sleep_ms(20);
+            gpio_put(PICO_DEFAULT_LED_PIN, 1);
+            display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
+                            expb.exp.c_str(), (uint16_t)Color::WHITE);
+            display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12, (uint16_t)Color::ORANGE);
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
         }
         sleep_ms(20);
