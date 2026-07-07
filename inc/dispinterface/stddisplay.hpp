@@ -1,7 +1,7 @@
 /** @file inc/dispinterface/stddisplay.hpp
  *  @brief Display initialization and control for the calculator project
  *  @author hdkghc
- *  @version 0.2
+ *  @version 0.1
  *  @date 2026
  *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
 
@@ -532,11 +532,12 @@ namespace Display {
         }
 
         /**
-         * @brief Draw a single scaled character using a GFX font
+         * @brief Draw a single scaled character using a GFX font with optimized batch rendering
          * 
          * Renders a character glyph from the specified GFX font at the
-         * given position with optional integer scaling. Characters outside
-         * the font's character range are silently ignored.
+         * given position with optional integer scaling. Uses batch pixel
+         * operations for improved performance over per-pixel drawing.
+         * Characters outside the font's character range are silently ignored.
          * 
          * @param x Cursor X position (left edge of character cell)
          * @param y Cursor Y position (baseline of character cell)
@@ -550,41 +551,63 @@ namespace Display {
             if (!font || c < font->first || c > font->last) return;
 
             GFXglyph glyph = font->glyph[c - font->first];
-            uint8_t *bitmap = font->bitmap + glyph.bitmapOffset;
-
+            
             int8_t glyph_x = x + glyph.xOffset * scale;
             int8_t glyph_y = y + glyph.yOffset * scale;
-
-            uint16_t bo = glyph.bitmapOffset;
             uint8_t w = glyph.width;
             uint8_t h = glyph.height;
-            uint8_t bits = 0;
+            uint8_t scaled_w = w * scale;
+            uint8_t scaled_h = h * scale;
 
+            // Skip if completely off-screen
+            if (glyph_x + scaled_w <= 0 || glyph_x >= TFT_WIDTH ||
+                glyph_y + scaled_h <= 0 || glyph_y >= TFT_HEIGHT) return;
+
+            // Clamp to display boundaries
+            uint8_t x1 = (glyph_x < 0) ? 0 : glyph_x;
+            uint8_t y1 = (glyph_y < 0) ? 0 : glyph_y;
+            uint8_t x2 = glyph_x + scaled_w - 1;
+            uint8_t y2 = glyph_y + scaled_h - 1;
+            if (x2 >= TFT_WIDTH)  x2 = TFT_WIDTH - 1;
+            if (y2 >= TFT_HEIGHT) y2 = TFT_HEIGHT - 1;
+
+            cs_select(CS);
+            set_addr(x1, y1, x2, y2);
+
+            uint8_t px[2] = { (uint8_t)(color >> 8), (uint8_t)(color & 0xFF) };
+            uint8_t blank[2] = {0, 0};
+            uint16_t bo = glyph.bitmapOffset;
+
+            // Render glyph directly to display GRAM for better performance
             for (uint8_t dy = 0; dy < h; dy++) {
-                for (uint8_t dx = 0; dx < w; dx++) {
-                    uint8_t byte_idx = bo + (bits / 8);
-                    uint8_t bit_pos = 7 - (bits % 8);
-                    bool set = (font->bitmap[byte_idx] >> bit_pos) & 0x01;
-                    bits++;
-
-                    if (set) {
-                        if (scale == 1) {
-                            DrawPixel(glyph_x + dx, glyph_y + dy, color);
-                        } else {
-                            DrawRect(glyph_x + dx * scale, glyph_y + dy * scale, 
-                                    scale, scale, color);
+                for (uint8_t sy = 0; sy < scale; sy++) {
+                    uint8_t actual_y = glyph_y + dy * scale + sy;
+                    if (actual_y < y1 || actual_y > y2) continue;
+                    
+                    for (uint8_t dx = 0; dx < w; dx++) {
+                        uint16_t bit_idx = bo * 8 + dy * w + dx;
+                        uint8_t byte_val = font->bitmap[bit_idx / 8];
+                        bool set = (byte_val >> (7 - (bit_idx % 8))) & 0x01;
+                        
+                        for (uint8_t sx = 0; sx < scale; sx++) {
+                            uint8_t actual_x = glyph_x + dx * scale + sx;
+                            if (actual_x < x1 || actual_x > x2) continue;
+                            spi_write_blocking(SPI, set ? px : blank, 2);
                         }
                     }
                 }
             }
+
+            cs_deselect(CS);
         }
 
         /**
-         * @brief Draw a string using a GFX font with scaling
+         * @brief Draw a string using a GFX font with scaling and optimized rendering
          * 
          * Renders a null-terminated string using the specified GFX font.
          * Supports newline characters (\\n) for multi-line text.
          * Carriage return characters (\\r) are ignored.
+         * Uses optimized batch rendering for better performance.
          * 
          * @param x Starting X coordinate
          * @param y Starting Y coordinate (baseline)
@@ -603,20 +626,103 @@ namespace Display {
 
             uint8_t cursor_x = x;
             uint8_t cursor_y = y;
+            uint8_t line_height = font->yAdvance * scale;
 
             for (char c : text) {
                 if (c == '\n') {
                     cursor_x = x;
-                    cursor_y += font->yAdvance * scale;
+                    cursor_y += line_height;
                     continue;
                 }
                 if (c == '\r') continue;
+                if (cursor_y >= TFT_HEIGHT) break; // Stop if beyond screen
 
                 DrawChar(cursor_x, cursor_y, c, font, scale, color);
 
                 uint16_t idx = c - font->first;
                 if (idx < (font->last - font->first + 1)) {
                     cursor_x += font->glyph[idx].xAdvance * scale;
+                }
+            }
+        }
+
+        /**
+         * @brief Draw a string with automatic text wrapping
+         * 
+         * Renders text that automatically wraps to the next line when
+         * exceeding the specified maximum width. Words are wrapped
+         * at character boundaries.
+         * 
+         * @param x Starting X coordinate
+         * @param y Starting Y coordinate (baseline)
+         * @param max_width Maximum pixel width before wrapping
+         * @param font Pointer to the GFXfont structure
+         * @param scale Integer scaling factor (1 = original size)
+         * @param text String to render
+         * @param color 16-bit RGB565 color value
+         */
+        void DrawTextWrapped(uint8_t x, uint8_t y, uint8_t max_width,
+                            const GFXfont *font, uint8_t scale,
+                            std::string text, uint16_t color) {
+            if (!font) return;
+
+            uint8_t cursor_x = x;
+            uint8_t cursor_y = y;
+            uint8_t line_height = font->yAdvance * scale;
+            uint8_t word_width = 0;
+            std::string word;
+
+            for (char c : text) {
+                if (c == ' ' || c == '\n') {
+                    // Check if word fits on current line
+                    if (cursor_x + word_width > x + max_width && cursor_x > x) {
+                        cursor_x = x;
+                        cursor_y += line_height;
+                    }
+
+                    // Render the word
+                    for (char wc : word) {
+                        DrawChar(cursor_x, cursor_y, wc, font, scale, color);
+                        uint16_t idx = wc - font->first;
+                        if (idx < (font->last - font->first + 1)) {
+                            cursor_x += font->glyph[idx].xAdvance * scale;
+                        }
+                    }
+
+                    word.clear();
+                    word_width = 0;
+
+                    if (c == ' ') {
+                        // Draw space
+                        cursor_x += font->glyph[' ' - font->first].xAdvance * scale;
+                    } else if (c == '\n') {
+                        cursor_x = x;
+                        cursor_y += line_height;
+                    }
+                } else {
+                    word += c;
+                    uint16_t idx = c - font->first;
+                    if (idx < (font->last - font->first + 1)) {
+                        word_width += font->glyph[idx].xAdvance * scale;
+                    }
+                }
+
+                if (cursor_y >= TFT_HEIGHT) break;
+            }
+
+            // Render remaining word if any
+            if (!word.empty()) {
+                if (cursor_x + word_width > x + max_width && cursor_x > x) {
+                    cursor_x = x;
+                    cursor_y += line_height;
+                }
+                for (char wc : word) {
+                    if (cursor_y >= TFT_HEIGHT) break;
+                    DrawChar(cursor_x, cursor_y, wc, font, scale, color);
+                    uint16_t idx = wc - font->first;
+                    if (idx < (font->last - font->first + 1)) {
+                        cursor_x += font->glyph[idx].xAdvance * scale;
+                    }
                 }
             }
         }
