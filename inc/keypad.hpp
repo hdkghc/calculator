@@ -70,7 +70,7 @@ namespace Keypad {
         // 
         const char *const BLOCKL  = "\x03\x20";  ///< Input block left mark
         const char *const BLOCKR  = "\x03\x21";  ///< Input block right mark
-        const char *const STO     = "\x03\x22";
+        const char *const STO     = "\x03\x22";  ///< Store mark
         const char *const RCL     = "\x03\x23";
     }
 

@@ -295,30 +295,31 @@ namespace CAS {
     }
 
     namespace EngUnit {
-        const char *const Quetta    = "*10^30";
-        const char *const Ronna     = "*10^27";
-        const char *const Yotta     = "*10^24";
-        const char *const Zetta     = "*10^21";
-        const char *const Exa       = "*10^18";
-        const char *const Peta      = "*10^15";
-        const char *const Tera      = "*10^12";
-        const char *const Giga      = "*10^9";
-        const char *const Mega      = "*10^6";
-        const char *const kilo      = "*10^3";
-        const char *const hecto     = "*10^2";
-        const char *const deka      = "*10";
-        const char *const deci      = "*10^(-1)";
-        const char *const centi     = "*10^(-2)";
-        const char *const milli     = "*10^(-3)";
-        const char *const micro     = "*10^(-6)";
-        const char *const nano      = "*10^(-9)";
-        const char *const pico      = "*10^(-12)";
-        const char *const femto     = "*10^(-15)";
-        const char *const atto      = "*10^(-18)";
-        const char *const zepto     = "*10^(-21)";
-        const char *const yocto     = "*10^(-24)";
-        const char *const ronto     = "*10^(-27)";
-        const char *const quecto    = "*10^(-30)";
+        // SI prefixes, \x05[power]
+        const char *const Quetta    = "\005\x1E";
+        const char *const Ronna     = "\005\x1B";
+        const char *const Yotta     = "\005\x18";
+        const char *const Zetta     = "\005\x15";
+        const char *const Exa       = "\005\x12";
+        const char *const Peta      = "\005\x0F";
+        const char *const Tera      = "\005\x0C";
+        const char *const Giga      = "\005\x09";
+        const char *const Mega      = "\005\x06";
+        const char *const kilo      = "\005\x03";
+        const char *const hecto     = "\005\x02";
+        const char *const deka      = "\005\x01";
+        const char *const deci      = "\005\xFF";
+        const char *const centi     = "\005\xFE";
+        const char *const milli     = "\005\xFD";
+        const char *const micro     = "\005\xFA";
+        const char *const nano      = "\005\xF7";
+        const char *const pico      = "\005\xF4";
+        const char *const femto     = "\005\xF1";
+        const char *const atto      = "\005\xEE";
+        const char *const zepto     = "\005\xEB";
+        const char *const yocto     = "\005\xE8";
+        const char *const ronto     = "\005\xE5";
+        const char *const quecto    = "\005\xE2";
     }
 } // namespace CAS
 

@@ -34,7 +34,6 @@ namespace Keypad {
     constexpr uint8_t M_LOCK   = 0x08;
     constexpr uint8_t M_INSERT = 0x10;
     constexpr uint8_t M_RCL    = 0x20;
-    constexpr uint8_t M_STO    = 0x40;
 
 
     constexpr uint8_t B_SUCCESS = 0x00;
@@ -102,19 +101,11 @@ namespace Keypad {
                     flg ^= M_RCL;
                     return;
                 }
-                if(k == Ctrl::STO) {
-                    flg ^= M_STO;
-                    return;
-                }
             }
             /** @brief Check invalid status */
             void _Check() {
                 if((flg & M_LOCK) && !(flg & M_CTRL)) {
                     flg &= 0xFF & (~M_LOCK);
-                }
-                if((flg & M_RCL) && (flg & M_STO)) {
-                    flg &= 0xFF & (~M_RCL);
-                    flg &= 0xFF & (~M_STO);
                 }
             }
             /** @brief Process AC key */
@@ -410,13 +401,21 @@ namespace Keypad {
                         _Move(Ctrl::X_MINUS); // Move left
                         return B_SUCCESS;
                     }
+                    if(exp[cp - 1] == Ctrl::STO[1]) {
+                        exp.erase(cp - 2, 2);
+                        cp -= 2;
+                        return B_SUCCESS;
+                    }
                 }
-                if((cp - 2 >= 0) && exp[cp - 2] == '\x02') {
-                    // constant, \x02\x??
+                if((cp - 2 >= 0) && (exp[cp - 2] == '\x02' || exp[cp - 2] == '\x04' || exp[cp - 2] == '\x05')) {
+                    // constant or conversion or SI prefix
                     exp.erase(cp - 2, 2);
                     cp -= 2;
                     return B_SUCCESS;
                 }
+                exp.erase(cp - 1, 1);
+                --cp;
+                return B_SUCCESS;
             }
             /** @brief Move the cursor */
             uint8_t _Move(std::string k) {
