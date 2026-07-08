@@ -50,6 +50,7 @@ sqrt [x]
 
 // \x01??\x03\x20...\x03\x21\x03\x20...\x03\x21
 // double input block
+^ [a] [b]
 root [n] [x] ==>  x^(1/n)
 log [a] [b]  ==>  log_b(a)
 permut [n] [k]
