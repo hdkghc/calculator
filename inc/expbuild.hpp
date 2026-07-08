@@ -519,14 +519,24 @@ namespace Keypad {
                         exp[toks[ti + 1].beg] == '(') {
                         cp = toks[ti + 1].end;
                     }
-                    // Boxed structure → enter first block (vector/matrix: skip whole)
+                    // Boxed prefix → enter first block
                     else if (_isBoxedPrefix(toks, ti)) {
                         std::string nm = _boxedNameAt(toks, ti);
                         if (nm == CAS::FuncName::vector ||
                             nm == CAS::FuncName::matrix) {
                             cp = _boxedEnd(toks, ti);
                         } else {
-                            cp = toks[ti + 1].end; // after first BLOCKL
+                            cp = toks[ti + 1].end;
+                        }
+                    }
+                    // BLOCKR → next block, or exit
+                    else if (t.type == TokType::CTRL &&
+                             exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
+                        int nextLi = _nextSiblingBlockL(toks, ti);
+                        if (nextLi >= 0) {
+                            cp = toks[nextLi].end;
+                        } else {
+                            cp = t.end;
                         }
                     }
                     else {
@@ -541,17 +551,71 @@ namespace Keypad {
                         ti - 2 >= 0 && toks[ti - 2].type == TokType::FUNC) {
                         cp = toks[ti - 2].beg;
                     }
-                    // Block marker → jump before the boxed prefix
-                    else if (t.type == TokType::CTRL) {
-                        int blkLi = (exp[t.beg + 1] == Ctrl::BLOCKL[1])
-                                    ? (ti - 1) : t.pair;
-                        int pi = (blkLi >= 0) ? _boxedPrefix(toks, blkLi) : -1;
-                        cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                    // BLOCKR → enter the block
+                    else if (t.type == TokType::CTRL &&
+                             exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
+                        int li = t.pair;
+                        if (li >= 0) {
+                            cp = (toks[li].end == toks[ti - 1].beg)
+                                 ? toks[li].end
+                                 : toks[ti - 1].beg;
+                        } else {
+                            cp = t.beg;
+                        }
+                    }
+                    // BLOCKL → previous block's end, or before prefix
+                    else if (t.type == TokType::CTRL &&
+                             exp[t.beg + 1] == Ctrl::BLOCKL[1]) {
+                        int prevRi = _prevSiblingBlockR(toks, ti - 1);
+                        if (prevRi >= 0) {
+                            int prevLi = toks[prevRi].pair;
+                            cp = (prevLi >= 0 &&
+                                  toks[prevLi].end == toks[prevRi].beg)
+                                 ? toks[prevLi].end
+                                 : toks[prevRi].beg;
+                        } else {
+                            int pi = _boxedPrefix(toks, ti - 1);
+                            cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                        }
                     }
                     else {
                         cp = t.beg;
                     }
                 }
+            }
+
+            /**
+             * @brief  Find the next sibling BLOCKL after a BLOCKR.
+             * @param  toks Token list.
+             * @param  ri   Token index of the BLOCKR.
+             * @return      Token index of next BLOCKL in the same boxed structure,
+             *              or -1 if this is the last block.
+             */
+            int _nextSiblingBlockL(const std::vector<Token> &toks, int ri) const {
+                if (ri + 1 >= (int)toks.size()) return -1;
+                const Token &next = toks[ri + 1];
+                if (next.type == TokType::CTRL &&
+                    exp[next.beg + 1] == Ctrl::BLOCKL[1]) {
+                    return ri + 1;
+                }
+                return -1;
+            }
+            
+            /**
+             * @brief  Find the previous sibling BLOCKR before a BLOCKL.
+             * @param  toks Token list.
+             * @param  li   Token index of the current BLOCKL.
+             * @return      Token index of previous BLOCKR in the same boxed
+             *              structure, or -1 if this is the first block.
+             */
+            int _prevSiblingBlockR(const std::vector<Token> &toks, int li) const {
+                if (li - 1 < 0) return -1;
+                const Token &prev = toks[li - 1];
+                if (prev.type == TokType::CTRL &&
+                    exp[prev.beg + 1] == Ctrl::BLOCKR[1]) {
+                    return li - 1;
+                }
+                return -1;
             }
 
             bool _isBoxedPrefix(const std::vector<Token> &toks, int ti) const {
@@ -719,7 +783,7 @@ namespace Keypad {
                     return B_SUCCESS;
                 }
 
-                // --- Case 2: inside a block -------------------------------
+                // --- Case 2: inside a block ---
                 for (int i = ti - 1; i >= 0; i--) {
                     if (toks[i].type == TokType::CTRL &&
                         exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
@@ -727,12 +791,46 @@ namespace Keypad {
                         int ri = toks[li].pair;
                         if (ri < 0) break;
 
-                        // Empty block? → delete whole function/operator
-                        if (cp == toks[li].end && toks[li].end == toks[ri].beg) {
-                            return _delBoxed(toks, li);
+                        // Cursor at very start of a block
+                        if (cp == toks[li].end) {
+                            // Single block → delete function, keep content
+                            if (_isSingleBlock(toks, li)) {
+                                return _delBoxed(toks, li);
+                            }
+
+                            // Multi-block: determine behavior based on function
+                            int pi = _boxedPrefix(toks, li);
+                            std::string nm = (pi >= 0) ? _boxedNameAt(toks, pi) : "";
+
+                            // log: block1 → jump to block2; block2 → delete function
+                            bool logStyle = (nm == CAS::FuncName::log);
+                            // root/permut/combin: block1 → delete function; block2 → jump to block1
+                            // (these are the opposite of log)
+
+                            int blkIdx = _blockIndex(toks, li);
+                            bool isFirstBlock = (blkIdx == 0);
+
+                            if (logStyle) {
+                                if (isFirstBlock) {
+                                    // Jump to block2 content end
+                                    return _jumpToOtherBlockEnd(toks, li);
+                                } else {
+                                    // Delete function, keep all content
+                                    return _delBoxed(toks, li);
+                                }
+                            } else {
+                                // root/permut/combin style
+                                if (isFirstBlock) {
+                                    // Delete function, keep all content
+                                    return _delBoxed(toks, li);
+                                } else {
+                                    // Jump to block1 content end
+                                    return _jumpToOtherBlockEnd(toks, li);
+                                }
+                            }
                         }
 
-                        // Inside block with content? → backspace
+                        // Inside block with content → backspace
                         if (cp > toks[li].end && cp <= toks[ri].beg) {
                             if (ti == 0) return B_ERROR;
                             return _delTok(toks, ti - 1);
@@ -748,26 +846,125 @@ namespace Keypad {
                 return _delTok(toks, ti - 1);
             }
 
+            /** True if the boxed structure starting at BLOCKL li has only one block */
+            bool _isSingleBlock(const std::vector<Token> &toks, int li) const {
+                int depth = 0;
+                int count = 0;
+                for (int i = li; i < (int)toks.size(); i++) {
+                    if (toks[i].type == TokType::CTRL &&
+                        exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                        if (depth == 0) count++;
+                        depth++;
+                    } else if (toks[i].type == TokType::CTRL &&
+                               exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                        depth--;
+                        if (depth < 0) break;
+                    }
+                }
+                return count == 1;
+            }
+
+            /** Find the OTHER block's BLOCKL index in a 2-block structure */
+            int _otherBlock(const std::vector<Token> &toks, int li) const {
+                std::vector<int> blks;
+                int depth = 0;
+                for (int i = li; i < (int)toks.size(); i++) {
+                    if (toks[i].type == TokType::CTRL &&
+                        exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                        if (depth == 0) blks.push_back(i);
+                        depth++;
+                    } else if (toks[i].type == TokType::CTRL &&
+                               exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                        depth--;
+                        if (depth < 0) break;
+                    }
+                }
+                if (blks.size() != 2) return -1;
+                return (blks[0] == li) ? blks[1] : blks[0];
+            }
+
             /**
-             * @brief  Delete a boxed function/operator given its first BLOCKL.
+             * @brief  Get the index (0-based) of a BLOCKL within its boxed structure.
              */
-            uint8_t _delBoxed(const std::vector<Token> &toks, int blkTi) {
-                int pi = _boxedPrefix(toks, blkTi);
+            int _blockIndex(const std::vector<Token> &toks, int li) const {
+                int idx = 0;
+                int depth = 0;
+                for (int i = li; i >= 0; i--) {
+                    if (toks[i].type == TokType::CTRL) {
+                        if (exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) depth++;
+                        else if (exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                            if (depth == 0) idx++;
+                            else depth--;
+                        }
+                    }
+                }
+                return idx - 1; // 0-based
+            }
+
+            /**
+             * @brief  Jump cursor to the OTHER block's content end in a 2-block structure.
+             */
+            uint8_t _jumpToOtherBlockEnd(const std::vector<Token> &toks, int li) {
+                std::vector<int> blks;
+                int depth = 0;
+                for (int i = li; i < (int)toks.size(); i++) {
+                    if (toks[i].type == TokType::CTRL &&
+                        exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                        if (depth == 0) blks.push_back(i);
+                        depth++;
+                    } else if (toks[i].type == TokType::CTRL &&
+                               exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                        depth--;
+                        if (depth < 0) break;
+                    }
+                }
+                if (blks.size() != 2) return B_ERROR;
+                int otherLi = (blks[0] == li) ? blks[1] : blks[0];
+                int otherRi = toks[otherLi].pair;
+                cp = (toks[otherLi].end == toks[otherRi].beg)
+                     ? toks[otherLi].end   // empty
+                     : toks[otherRi].beg;  // end of content
+                return B_SUCCESS;
+            }
+
+            /**
+             * @brief  Delete a boxed function/operator given the first BLOCKL.
+             *         If the block is empty, other blocks' content is kept.
+             */
+            uint8_t _delBoxed(const std::vector<Token> &toks, int delLi) {
+                int pi = _boxedPrefix(toks, delLi);
                 if (pi < 0) return B_ERROR;
 
-                // Find outermost BLOCKR
+                std::vector<int> blks;
+                int depth = 0;
                 int lastRi = -1;
-                for (int i = blkTi; i < (int)toks.size(); i++) {
+                for (int i = delLi; i < (int)toks.size(); i++) {
                     if (toks[i].type == TokType::CTRL &&
-                        exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
-                        lastRi = i;
-                        if (toks[i].pair == blkTi) break;
+                        exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                        if (depth == 0) blks.push_back(i);
+                        depth++;
+                    } else if (toks[i].type == TokType::CTRL &&
+                               exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                        depth--;
+                        if (depth == 0) lastRi = i;
+                        if (depth < 0) break;
                     }
                 }
                 if (lastRi < 0) return B_ERROR;
 
+                // Collect content from ALL blocks
+                std::string kept;
+                for (int b = 0; b < (int)blks.size(); b++) {
+                    int ri = toks[blks[b]].pair;
+                    if (ri >= 0 && toks[blks[b]].end < toks[ri].beg) {
+                        kept += exp.substr(toks[blks[b]].end,
+                                           toks[ri].beg - toks[blks[b]].end);
+                    }
+                }
+
                 exp.erase(toks[pi].beg, toks[lastRi].end - toks[pi].beg);
-                cp = toks[pi].beg;
+                exp.insert(toks[pi].beg, kept);
+                cp = toks[pi].beg + (int16_t)kept.size();
                 return B_SUCCESS;
             }
 
