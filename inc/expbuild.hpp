@@ -875,20 +875,27 @@ namespace Keypad {
                 int16_t i = pos - 1;
                 uint8_t lead = (uint8_t)exp[i];
 
-                // Multi-byte token (\x02–\x06, 2 bytes) — find its lead byte
-                if (lead >= 0x02 && lead <= 0x06) {
-                    // The lead byte is at i (2-byte token: lead is first byte)
-                    return i;
-                }
+                // Multi-byte token (\x02–\x06, 2 bytes)
+                if (lead >= 0x02 && lead <= 0x06) return i;
 
-                // \x01 function (3 bytes) — find its start
-                if (lead == 0x01) {
-                    // lead byte itself is the start of a 3-byte token
-                    return i;
+                // \x01 function — find its start
+                if (i >= 2 && (uint8_t)exp[i - 2] == 0x01) {
+                    // Check if this function is followed by '('
+                    int16_t funcStart = i - 2;
+                    if (funcStart + 3 < (int16_t)exp.size() && exp[funcStart + 3] == '(') {
+                        // \x01xx( — find the matching ')'
+                        int d = 1; i = funcStart + 4;
+                        while (i < (int16_t)exp.size() && d > 0) {
+                            if (exp[i] == '(') d++; else if (exp[i] == ')') d--;
+                            i++;
+                        }
+                        return funcStart; // return \x01 position
+                    }
+                    // Standalone \x01 function without '('
+                    return funcStart;
                 }
-                // Check if we're at the second or third byte of a \x01 token
                 if (i >= 1 && (uint8_t)exp[i - 1] == 0x01) return i - 1;
-                if (i >= 2 && (uint8_t)exp[i - 2] == 0x01) return i - 2;
+                if ((uint8_t)exp[i] == 0x01) return i;
 
                 // Closing parenthesis ')' → find matching '('
                 if (lead == ')') {
@@ -898,10 +905,14 @@ namespace Keypad {
                         else if (exp[i] == '(') d--;
                         if (d > 0) i--;
                     }
-                    return i; // position of '('
+                    // Now i is at '('. Check if preceded by \x01 function
+                    if (i >= 3 && (uint8_t)exp[i - 3] == 0x01) {
+                        return i - 3; // include the \x01 function
+                    }
+                    return i;
                 }
 
-                // Number or identifier — scan to the start
+                // Number or identifier
                 if ((lead >= '0' && lead <= '9') || lead == '.' ||
                     (lead >= 'A' && lead <= 'Z') || (lead >= 'a' && lead <= 'z')) {
                     while (i > 0 &&
@@ -912,7 +923,6 @@ namespace Keypad {
                     return i;
                 }
 
-                // Single-byte character (operator, space, etc.)
                 return i;
             }
 
