@@ -32,7 +32,7 @@
 |-------|--------|-------|------|------|------|------|
 | **A** | SHIFT  | ALPHA |      | STO  | SET  | CLR  |
 | **B** | frac   |       | ^-1  |      |  ;   | logab|
-| **C** |        |  ↑ Y+ |      | tanh |      | LOCK |
+| **C** |        |  ↑ Y+ |      | tanh | UNDO | LOCK |
 | **D** |  ← X-  |  OK   | → X+ | cosh |  !   | mod  |
 | **E** |        |  ↓ Y- |  Z+  | sinh | lcm  | gcd  |
 | **F** | ZOOM+  | ZOOM- |  Z-  |  exp | plt3 | plt2 |
@@ -47,7 +47,7 @@
 |-------|--------|-------|------|-------|------|--------|
 | **A** |        | ALPHA |      |  RCL  |      |   ON   |
 | **B** |        |       |      |       |      |        |
-| **C** |        |       |      | atanh |      |        |
+| **C** |        |       |      | atanh | REDO |        |
 | **D** |        |       |      | acosh |      |        |
 | **E** |        |       |      | asinh |      | FACTOR |
 | **F** |        |       |      |       |      | EXPAND |

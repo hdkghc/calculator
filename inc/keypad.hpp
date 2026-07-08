@@ -72,6 +72,8 @@ namespace Keypad {
         const char *const BLOCKR  = "\x03\x21";  ///< Input block right mark
         const char *const STO     = "\x03\x22";  ///< Store mark
         const char *const RCL     = "\x03\x23";
+        const char *const UNDO    = "\x03\x24";
+        const char *const REDO    = "\x03\x25";
     }
 
     // Variable identifiers
@@ -270,8 +272,8 @@ namespace Keypad {
                 Ctrl::INS,              // 1: SHIFT
                 "k",                    // 2: ALPHA
                 "K",                    // 3: SHIFT|ALPHA
-                "",                     // 4: CTRL
-                "",                     // 5: SHIFT|CTRL
+                Ctrl::UNDO,                     // 4: CTRL
+                Ctrl::REDO,                     // 5: SHIFT|CTRL
             },
             // C6: AC / OFF / LOCK
             {
