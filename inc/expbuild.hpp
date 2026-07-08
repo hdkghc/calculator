@@ -272,13 +272,13 @@ namespace Keypad {
             uint8_t insert(std::string k) {
                 if (k.empty()) return B_SUCCESS;
 
-                // ----- Modifier keys (toggle internal flags, clear SHIFT) ------
+                // ----- Modifier keys (toggle internal flags) ------
                 if (k == Ctrl::SHIFT) { flg ^= M_SHIFT; return B_SUCCESS; }
-                if (k == Ctrl::ALPHA) { flg ^= M_ALPHA; flg &= ~M_SHIFT; return B_SUCCESS; }
-                if (k == Ctrl::CTRL)  { flg ^= M_CTRL; flg &= ~M_LOCK; flg &= ~M_SHIFT; return B_SUCCESS; }
-                if (k == Ctrl::LOCK)  { flg ^= M_LOCK; flg &= ~M_SHIFT; return B_SUCCESS; }
+                if (k == Ctrl::ALPHA) { flg ^= M_ALPHA; return B_SUCCESS; }
+                if (k == Ctrl::CTRL)  { flg ^= M_CTRL; flg &= ~M_LOCK; return B_SUCCESS; }
+                if (k == Ctrl::LOCK)  { flg ^= M_LOCK; return B_SUCCESS; }
                 if (k == Ctrl::INS)   { flg ^= M_INSERT; flg &= ~M_SHIFT; return B_SUCCESS; }
-                if (k == Ctrl::RCL)   { flg ^= M_RCL; flg &= ~M_SHIFT; return B_SUCCESS; }
+                if (k == Ctrl::RCL)   { flg ^= M_RCL; flg &= ~M_SHIFT; flg &= ~M_CTRL; return B_SUCCESS; }
 
                 // ----- Undo / Redo (full state snapshot) ------------------------
                 if (k == Ctrl::UNDO) return _undo();
