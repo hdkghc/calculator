@@ -37,6 +37,14 @@ uint8_t getB(uint16_t color) {
     return (color << 3) & 0xF8;
 }
 
+uint16_t RGB888_to_RGB565(uint8_t r, uint8_t g, uint8_t b) {
+    return RGB565(r >> 3, g >> 2, b >> 3);
+}
+
+uint16_t RGB111_to_RGB565(uint8_t r, uint8_t g, uint8_t b) {
+    return RGB565(r ? 0xFF : 0x00, g ? 0xFF : 0x00, b ? 0xFF : 0x00);
+}
+
 enum class Color : uint16_t {
     BLACK = 0x0000,
     WHITE = 0xFFFF,

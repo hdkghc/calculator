@@ -1,7 +1,7 @@
 /** @file /inc/expbuild.hpp
  *  @brief Builds internal expression strings from key presses
  *  @author hdkghc
- *  @version 0.2
+ *  @version 0.1
  *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
 
     This program is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ namespace Keypad {
     constexpr uint8_t B_HISTDN  = 0x14; ///< Recall next history entry
     constexpr uint8_t B_VECEDT  = 0x15; ///< Edit existing vector
     constexpr uint8_t B_MATEDT  = 0x16; ///< Edit existing matrix
-    constexpr uint8_t B_CLRSCR  = 0x17; ///< Clear screen (ON key)
+    constexpr uint8_t B_RESET   = 0x17; ///< Reset (ON key)
     constexpr uint8_t B_OFF     = 0xFE; ///< Power off
     constexpr uint8_t B_ERROR   = 0xFF; ///< Generic error
     /** @} */
@@ -254,6 +254,10 @@ namespace Keypad {
              */
             uint8_t press(uint8_t r, uint8_t c) {
                 std::string k = getKey(r, c, flg & 0x7);
+                return insert(k);
+            }
+            
+            uint8_t insert(std::string k) {
                 if (k.empty()) return B_SUCCESS;
 
                 // ----- Modifier keys ----------------------------------------
@@ -265,16 +269,17 @@ namespace Keypad {
                 if (k == Ctrl::RCL)   { flg ^= M_RCL; return B_SUCCESS; }
 
                 // ----- Global controls --------------------------------------
-                if (k == Ctrl::ON)  return B_CLRSCR;
+                if (k == Ctrl::ON)  return B_RESET;
                 if (k == Ctrl::OFF) return B_OFF;
                 if (k == Ctrl::AC)  { exp.clear(); cp = 0; flg = 0; return B_SUCCESS; }
 
                 // ----- Navigation -------------------------------------------
-                if (k == Ctrl::X_PLUS)  { _right(); return B_SUCCESS; }
-                if (k == Ctrl::X_MINUS) { _left();  return B_SUCCESS; }
+                if (k == Ctrl::X_PLUS)  { _right(); _rel();  return B_SUCCESS; }
+                if (k == Ctrl::X_MINUS) { _left();  _rel();  return B_SUCCESS; }
                 if (k == Ctrl::Y_PLUS || k == Ctrl::Y_MINUS) {
                     if (exp.empty()) return (k == Ctrl::Y_PLUS) ? B_HISTUP : B_HISTDN;
                     _vert(k == Ctrl::Y_PLUS);
+                    _rel();
                     return B_SUCCESS;
                 }
 
@@ -301,6 +306,8 @@ namespace Keypad {
 
                 // ----- STO (store arrow, enters expression as \x03\x22) -----
                 if (k == Ctrl::STO) { _ins(k); return B_SUCCESS; }
+
+                if (k[0] == 0x03)       return B_ERROR;
 
                 // ----- GUI-edited objects (deferred to external editor) -----
                 if (k == CAS::FuncName::vector)  return B_VECDEF;
@@ -520,7 +527,7 @@ namespace Keypad {
                 if ((flg & M_CTRL) && !(flg & M_LOCK) && !(flg & M_ALPHA))
                     flg &= ~M_CTRL;
                 // LOCK is meaningless without CTRL
-                if ((flg & M_LOCK) && !(flg & M_CTRL))
+                if ((flg & M_LOCK) && ((flg & 0x07) != M_CTRL))
                     flg &= ~M_LOCK;
             }
 

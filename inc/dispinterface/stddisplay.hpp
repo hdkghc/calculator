@@ -518,6 +518,35 @@ namespace Display {
                 }
             }
         }
+
+        /**
+         * @brief Draw a string using a GFX font with scaling
+         */
+        void DrawTextC(uint8_t x, uint8_t y, const GFXfont *font, uint8_t scale,
+                     std::string text, std::vector<uint16_t> color) {
+            if (!font) return;
+
+            uint8_t cursor_x = x;
+            uint8_t cursor_y = y;
+
+            for (size_t i = 0; i < text.size(); ++i) {
+                char c = text[i];
+                if (c == '\n') {
+                    cursor_x = x;
+                    cursor_y += font->yAdvance * scale;
+                    continue;
+                }
+                if (c == '\r') continue;
+                if (cursor_y >= TFT_HEIGHT) break;
+
+                DrawChar(cursor_x, cursor_y, c, font, scale, color[i % color.size()]);
+
+                uint16_t idx = c - font->first;
+                if (idx <= (font->last - font->first)) {
+                    cursor_x += font->glyph[idx].xAdvance * scale;
+                }
+            }
+        }
     }; // class RedTFTdisp
 
 } // namespace Display
