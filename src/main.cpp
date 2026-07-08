@@ -72,7 +72,7 @@ int main() {
             gpio_put(PICO_DEFAULT_LED_PIN, 1);
             display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
                             expb.exp.c_str(), ((expb.flg & 7) == 0) ? ((uint16_t)Color::ORANGE) : RGB111_to_RGB565(expb.flg & M_ALPHA, expb.flg & M_SHIFT, expb.flg & M_CTRL));
-            display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12, (uint16_t)Color::ORANGE);
+            display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12, (expb.flg & M_INSERT) ? (uint16_t)Color::PURPLE : (uint16_t)Color::ORANGE);
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
         }
         sleep_ms(20);
