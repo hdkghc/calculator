@@ -350,7 +350,7 @@ namespace Keypad {
                 // ----- Boxed functions ------------------------------------------
                 // 1-block (no absorption — always empty box)
                 if (k == CAS::FuncName::abs || k == CAS::FuncName::sqrt)
-                    return _boxedFunc(k, 1);
+                    return _boxedFuncAbsorb(k, 1);
 
                 // 2-block with operand absorption (root, permut, combin, diff, indefint)
                 if (k == CAS::FuncName::root || k == CAS::FuncName::permut ||
@@ -734,62 +734,51 @@ namespace Keypad {
              *          or multi-byte constant/variable.
              */
             uint8_t _boxedFuncAbsorb(const std::string &fn, int n) {
-                auto toks = _tok();
-                int ti = _tokIdx(toks, cp);
+                // Use _scanOp / _scanOpBack for proper operand detection
+                int16_t beforeStart = _scanOpBack(cp);
+                int16_t afterEnd    = _scanOp(cp);
 
-                // ---- Scan operand before cursor (always absorbed) ----
-                std::string before;
-                int16_t beforeStart = cp;
-                if (ti > 0 && toks[ti - 1].end == cp) {
-                    beforeStart = toks[ti - 1].beg;
-                    before = exp.substr(beforeStart, cp - beforeStart);
-                }
+                std::string before = (beforeStart < cp)
+                                    ? exp.substr(beforeStart, cp - beforeStart) : "";
+                std::string after  = (afterEnd > cp)
+                                    ? exp.substr(cp, afterEnd - cp) : "";
 
-                // ---- Scan operand after cursor ----
-                // In insert mode: absorb after-operand into block 0, then exit insert mode.
-                // Otherwise: normal absorption (after → block 1).
-                std::string after;
-                int16_t afterEnd = cp;
-                bool doInsert = (flg & M_INSERT) && (ti < (int)toks.size()) && (toks[ti].beg == cp);
-                if (doInsert || (ti < (int)toks.size() && toks[ti].beg == cp)) {
-                    afterEnd = toks[ti].end;
-                    after = exp.substr(cp, afterEnd - cp);
-                }
+                bool doInsert = (flg & M_INSERT) && !after.empty();
 
                 // Remove absorbed content
-                if (afterEnd > cp)    exp.erase(cp, afterEnd - cp);
-                if (beforeStart < cp) { exp.erase(beforeStart, cp - beforeStart); cp = beforeStart; }
+                if (afterEnd > cp)       exp.erase(cp, afterEnd - cp);
+                if (beforeStart < cp)    { exp.erase(beforeStart, cp - beforeStart); cp = beforeStart; }
 
-                // Build
                 int16_t insPos = cp;
                 std::string s = fn;
-                if (doInsert) {
-                    // Insert mode: after-operand goes to block 0 (first block),
-                    // before-operand goes to block 1.
-                    s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;   // block 0 ← after
-                    s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;   // block 1 ← before
+
+                if (n == 1) {
+                    // Single block: after-operand goes into the box
+                    s += Ctrl::BLOCKL; s += after; s += Ctrl::BLOCKR;
+                } else if (doInsert) {
+                    // Insert mode: after → block 0, before → block 1
+                    s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;
+                    s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;
+                    for (int i = 2; i < n; i++) { s += Ctrl::BLOCKL; s += Ctrl::BLOCKR; }
                 } else {
                     // Normal: before → block 0, after → block 1
-                    s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;   // block 0
-                    s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;   // block 1
-                }
-                for (int i = 2; i < n; i++) {
-                    s += Ctrl::BLOCKL; s += Ctrl::BLOCKR;
+                    s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;
+                    s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;
+                    for (int i = 2; i < n; i++) { s += Ctrl::BLOCKL; s += Ctrl::BLOCKR; }
                 }
                 _raw(s);
 
-                // Cursor
-                if (doInsert) {
-                    // Insert mode: cursor in block 1 (where before-operand is)
+                // Cursor positioning
+                if (n == 1) {
+                    cp = insPos + (int16_t)fn.size() + BLKLEN;
+                } else if (doInsert) {
                     cp = insPos + (int16_t)fn.size() + BLKLEN
                         + (int16_t)after.size() + BLKLEN + BLKLEN;
-                    flg &= ~M_INSERT;  // one-shot — exit insert mode
+                    flg &= ~M_INSERT;
                 } else if (after.empty() && !before.empty()) {
-                    // Jump to block 1
                     cp = insPos + (int16_t)fn.size() + BLKLEN
                         + (int16_t)before.size() + BLKLEN + BLKLEN;
                 } else {
-                    // Block 0
                     cp = insPos + (int16_t)fn.size() + BLKLEN;
                 }
                 _rel();
@@ -870,6 +859,61 @@ namespace Keypad {
 
                 // Single-byte character (operator, comma, etc.)
                 return pos + 1;
+            }
+
+            /**
+             * @brief  Scan backward from @p pos to find the start of one operand.
+             * @param  pos Ending byte offset (cursor position).
+             * @return     Offset of the operand's first byte.
+             *
+             * @details Symmetric to _scanOp().  Recognises parenthesised groups,
+             *          boxed functions, numbers, identifiers, and multi-byte
+             *          tokens by scanning in reverse from @p pos.
+             */
+            int16_t _scanOpBack(int16_t pos) const {
+                if (pos <= 0) return 0;
+                int16_t i = pos - 1;
+                uint8_t lead = (uint8_t)exp[i];
+
+                // Multi-byte token (\x02–\x06, 2 bytes) — find its lead byte
+                if (lead >= 0x02 && lead <= 0x06) {
+                    // The lead byte is at i (2-byte token: lead is first byte)
+                    return i;
+                }
+
+                // \x01 function (3 bytes) — find its start
+                if (lead == 0x01) {
+                    // lead byte itself is the start of a 3-byte token
+                    return i;
+                }
+                // Check if we're at the second or third byte of a \x01 token
+                if (i >= 1 && (uint8_t)exp[i - 1] == 0x01) return i - 1;
+                if (i >= 2 && (uint8_t)exp[i - 2] == 0x01) return i - 2;
+
+                // Closing parenthesis ')' → find matching '('
+                if (lead == ')') {
+                    int d = 1; i--;
+                    while (i >= 0 && d > 0) {
+                        if (exp[i] == ')') d++;
+                        else if (exp[i] == '(') d--;
+                        if (d > 0) i--;
+                    }
+                    return i; // position of '('
+                }
+
+                // Number or identifier — scan to the start
+                if ((lead >= '0' && lead <= '9') || lead == '.' ||
+                    (lead >= 'A' && lead <= 'Z') || (lead >= 'a' && lead <= 'z')) {
+                    while (i > 0 &&
+                        ((exp[i - 1] >= '0' && exp[i - 1] <= '9') ||
+                            exp[i - 1] == '.' ||
+                            (exp[i - 1] >= 'A' && exp[i - 1] <= 'Z') ||
+                            (exp[i - 1] >= 'a' && exp[i - 1] <= 'z'))) i--;
+                    return i;
+                }
+
+                // Single-byte character (operator, space, etc.)
+                return i;
             }
 
             // =============================================================
