@@ -76,12 +76,12 @@ namespace Keypad {
 
     // Variable identifiers
     namespace VarName {
-        const char *const Ans    = "\x04\x01";  ///< Ans
-        const char *const PAns   = "\x04\x02";  ///< PreAns
-        const char *const theta  = "\x04\x03";  ///< theta
-        const char *const lambda = "\x04\x04";  ///< lambda
-        const char *const mu     = "\x04\x05";  ///< mu
-        const char *const alpha  = "\x04\x06";  ///< alpha
+        const char *const Ans    = "\x06\x01";  ///< Ans
+        const char *const PAns   = "\x06\x02";  ///< PreAns
+        const char *const theta  = "\x06\x03";  ///< theta
+        const char *const lambda = "\x06\x04";  ///< lambda
+        const char *const mu     = "\x06\x05";  ///< mu
+        const char *const alpha  = "\x06\x06";  ///< alpha
     }
 
     // Special symbols
@@ -452,7 +452,7 @@ namespace Keypad {
                 Ctrl::EXE,              // 0
                 "=",                    // 1: SHIFT
                 VarName::alpha,         // 2: ALPHA
-                "",                     // 3: SHIFT|ALPHA
+                " ",                    // 3: SHIFT|ALPHA
                 CAS::FuncName::plot2d,  // 4: CTRL
                 Ctrl::EXPAND,           // 5: SHIFT|CTRL
             }

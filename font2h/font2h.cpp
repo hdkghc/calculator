@@ -92,6 +92,23 @@ std::string format_size(uint32_t bytes) {
     return std::to_string(bytes) + " bytes";
 }
 
+/**
+ * @brief Generate a solid filled box bitmap
+ * @param w  Width in pixels
+ * @param h  Height in pixels
+ * @return   Packed 1bpp MSB-first bitmap vector
+ */
+static std::vector<uint8_t> make_solid_box(int w, int h) {
+    int bytes_per_row = (w + 7) / 8;
+    std::vector<uint8_t> buf(bytes_per_row * h, 0);
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            buf[y * bytes_per_row + x / 8] |= (0x80 >> (x % 8));
+        }
+    }
+    return buf;
+}
+
 void generate_header(
     const std::string &font_name, int font_size,
     const std::vector<uint8_t> &bitmaps,
@@ -201,48 +218,65 @@ int main(int argc, char **argv) {
 
     std::map<uint16_t, bool> char_map;
 
-    // Collect all ASCII printable characters, track missing ones for placeholders
-    for (uint16_t c = 0x20; c <= 0x7E; c++) {
+    // Generate from 0x00 to 0xFF (all 8-bit characters)
+    for (uint16_t c = 0x00; c <= 0xFF; c++) {
         char_map[c] = true;
     }
+
+    // Box dimensions for missing glyphs
+    const int BOX_W = font_size * 3 / 4;  // height * 3/4
+    const int BOX_H = font_size;
+    std::vector<uint8_t> box_bitmap = make_solid_box(BOX_W, BOX_H);
 
     std::vector<uint8_t> bitmaps;
     std::vector<GFXglyph> glyphs;
     uint16_t offset = 0;
     int char_count = 0;
 
-    for (uint16_t c = 0x20; c <= 0x7E; c++) {
+    for (uint16_t c = 0x00; c <= 0xFF; c++) {
         FT_UInt gidx = FT_Get_Char_Index(face, c);
         
         if (gidx == 0) {
-            // Missing glyph - add empty placeholder
-            GFXglyph empty{};
-            empty.bitmapOffset = offset;
-            empty.width = 0;
-            empty.height = 0;
-            empty.xAdvance = font_size;
-            empty.xOffset = 0;
-            empty.yOffset = 0;
-            glyphs.push_back(empty);
+            // Missing glyph → solid box
+            GFXglyph box{};
+            box.bitmapOffset = offset;
+            box.width  = BOX_W;
+            box.height = BOX_H;
+            box.xAdvance = BOX_W;
+            box.xOffset  = 0;
+            box.yOffset  = -BOX_H;
+
+            bitmaps.insert(bitmaps.end(), box_bitmap.begin(), box_bitmap.end());
+            glyphs.push_back(box);
+            offset += static_cast<uint16_t>(box_bitmap.size());
             char_count++;
-            log_skip("0x" + (std::stringstream() << std::hex << std::setw(2) << std::setfill('0') << c).str() 
-                     + " '" + (char)c + "' placeholder");
+
+            std::stringstream ss;
+            ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c
+               << std::dec << " → box";
+            log_skip(ss.str());
             continue;
         }
 
         if (FT_Load_Glyph(face, gidx, FT_LOAD_RENDER)) {
-            // Load failed - add empty placeholder
-            GFXglyph empty{};
-            empty.bitmapOffset = offset;
-            empty.width = 0;
-            empty.height = 0;
-            empty.xAdvance = font_size;
-            empty.xOffset = 0;
-            empty.yOffset = 0;
-            glyphs.push_back(empty);
+            // Load failed → solid box
+            GFXglyph box{};
+            box.bitmapOffset = offset;
+            box.width  = BOX_W;
+            box.height = BOX_H;
+            box.xAdvance = BOX_W;
+            box.xOffset  = 0;
+            box.yOffset  = -BOX_H;
+
+            bitmaps.insert(bitmaps.end(), box_bitmap.begin(), box_bitmap.end());
+            glyphs.push_back(box);
+            offset += static_cast<uint16_t>(box_bitmap.size());
             char_count++;
-            log_skip("0x" + (std::stringstream() << std::hex << std::setw(2) << std::setfill('0') << c).str() 
-                     + " '" + (char)c + "' load failed");
+
+            std::stringstream ss;
+            ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c
+               << std::dec << " load failed → box";
+            log_skip(ss.str());
             continue;
         }
 
@@ -266,6 +300,7 @@ int main(int argc, char **argv) {
         glyph.width = w;
         glyph.height = h;
         glyph.xAdvance = g->metrics.horiAdvance / 64;
+        if (glyph.xAdvance == 0) glyph.xAdvance = w + 1;
         glyph.xOffset = g->bitmap_left;
         glyph.yOffset = -g->bitmap_top;
 
@@ -274,11 +309,11 @@ int main(int argc, char **argv) {
         offset += static_cast<uint16_t>(buf.size());
         char_count++;
 
-        // Compact per-char log
         std::stringstream ss;
-        ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c << std::dec
-           << " '" << (char)c << "'"
-           << " off=" << std::setw(4) << glyph.bitmapOffset
+        ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c << std::dec;
+        if (c >= 0x20 && c <= 0x7E)
+            ss << " '" << (char)c << "'";
+        ss << " off=" << std::setw(4) << glyph.bitmapOffset
            << " w=" << std::setw(2) << w
            << " h=" << std::setw(2) << h
            << " sz=" << std::setw(3) << buf.size()

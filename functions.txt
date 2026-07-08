@@ -1,4 +1,5 @@
 // \x01??(...)
+// params seperated by comma
 sin [x]
 cos [x]
 tan [x]
@@ -43,26 +44,36 @@ randint [from] [to]
 randrat [from] [to]
 
 // \x01??\x03\x20...\x03\x21
+// single input block
 abs [x]
 sqrt [x]
 
 // \x01??\x03\x20...\x03\x21\x03\x20...\x03\x21
+// double input block
 root [n] [x] ==>  x^(1/n)
 log [a] [b]  ==>  log_b(a)
 permut [n] [k]
 combin [n] [k]
-
-// ...\x01??...
-[x] fact
-[v1] dot [v2]
-
-
-sum [exp] [i] [from] [to]
-prod [exp] [i] [from] [to]
-defint [exp] [t] [from] [to]
 diff [exp] [x]
 indefint [exp] [t]
 
+// ...\x01??...
+// act as operator
+[x] fact
+[v1] dot [v2]
+bnot [x]
+band [x]
+...
+[x] estx1
+[x] estx2
+[x] esty
+
+// 4 input blocks
+sum [exp] [i] [from] [to]
+prod [exp] [i] [from] [to]
+defint [exp] [t] [from] [to]
+
+// Interactively define & edit
 vector [n] [a1] [a2] ... [an]
 matrix [n] [m] [a11] [a12] ... [a1m] [a21] ... [a2m] ... [an1] ... [anm]
 
