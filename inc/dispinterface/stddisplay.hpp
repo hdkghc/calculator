@@ -2,7 +2,6 @@
  *  @brief Display initialization and control for the calculator project
  *  @author hdkghc
  *  @version 0.1
- *  @date 2026
  *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
 
     This program is free software: you can redistribute it and/or modify

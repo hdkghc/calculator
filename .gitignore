@@ -5,3 +5,4 @@ fonts/*
 test_fonts/build
 test/bin
 doc/*
+preview.ppm

@@ -1321,7 +1321,6 @@ namespace Keypad {
                 return B_SUCCESS;
             }
     };
-
 } // namespace Keypad
 
 #endif // _EXPBUILD_HPP_

@@ -32,6 +32,7 @@ extern "C" {
 #include "rgb.h"
 
 #include "expbuild.hpp"
+#include "cas/treesimp.hpp"
 
 using namespace std;
 using namespace Keypad;

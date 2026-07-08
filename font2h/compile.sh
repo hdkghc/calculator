@@ -21,6 +21,6 @@ fi
 echo "Compiling..."
 mkdir -p bin
 g++ ./font2h/font2h.cpp -o ./font2h/bin/font2h -lfreetype -O2 -I/usr/include/freetype2
-# g++ ./font2h/pvw.cpp -o ./font2h/bin/preview -lfreetype -lSDL2 -O2 -I/usr/include/freetype2 -I/usr/include/SDL2
+g++ ./font2h/preview.cpp -o ./font2h/bin/preview -lfreetype -lSDL2 -O2 -I/usr/include/freetype2
 
 echo "Done."
