@@ -286,25 +286,93 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
-        // log10(100) = 2
-        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(100))) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(2)));
+        // log10(10^k) = k  for rational 10^k (e.g. 100, 0.01, ...)
+        if (SimpUtil::isRational(arg)) {
+            Intg num = arg->value.numerator();
+            Intg den = arg->value.den;
+            Intg ten(10), power(0);
+            bool isPow10 = true;
+            Intg tmp = num;
+            while (tmp > Intg(1)) {
+                auto dr = tmp.divmod(ten);
+                if (dr.second != Intg(0)) { isPow10 = false; break; }
+                tmp = dr.first;
+                power = power + Intg(1);
+            }
+            if (isPow10 && den > Intg(1)) {
+                Intg denPower(0);
+                tmp = den;
+                while (tmp > Intg(1)) {
+                    auto dr = tmp.divmod(ten);
+                    if (dr.second != Intg(0)) { isPow10 = false; break; }
+                    tmp = dr.first;
+                    denPower = denPower + Intg(1);
+                }
+                if (isPow10) power = power - denPower;
+            }
+            if (isPow10 && num > Intg(0)) {
+                SimpUtil::freeTree(node);
+                return SimpUtil::makeRational(Rational(power));
+            }
         }
 
-        // log10(1000) = 3
-        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1000))) {
-            SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(3)));
+        // log10(k * x) = log10(k) + log10(x)  if k is a power of 10
+        // also handles log10(10 * x) = 1 + log10(x)
+        if (SimpUtil::isFunction(arg, "*") && arg->child.size() == 2) {
+            Exptree *c1 = arg->child[0], *c2 = arg->child[1];
+            for (int pass = 0; pass < 2; pass++) {
+                Exptree* kNode  = (pass == 0) ? c1 : c2;
+                Exptree* other  = (pass == 0) ? c2 : c1;
+                if (SimpUtil::isRational(kNode)) {
+                    Intg num = kNode->value.numerator();
+                    Intg den = kNode->value.den;
+                    Intg ten(10), power(0);
+                    bool isPow10 = true;
+                    Intg tmp = num;
+                    while (tmp > Intg(1)) {
+                        auto dr = tmp.divmod(ten);
+                        if (dr.second != Intg(0)) { isPow10 = false; break; }
+                        tmp = dr.first;
+                        power = power + Intg(1);
+                    }
+                    if (isPow10 && den == Intg(1)) {
+                        Exptree* logOther = SimpUtil::makeFunction(FuncName::log10);
+                        logOther->child.push_back(SimpUtil::deepCopy(other));
+                        Exptree* result = SimpUtil::makeFunction("+");
+                        result->child.push_back(SimpUtil::makeRational(Rational(power)));
+                        result->child.push_back(logOther);
+                        SimpUtil::freeTree(node);
+                        return simplifyAdd(result);
+                    }
+                }
+            }
         }
 
-        // log10(1/10) = -1
-        if (SimpUtil::isRational(arg) && arg->value == Rational(Intg(1), Intg(10))) {
+        // log10(x / 10) = log10(x) - 1
+        if (SimpUtil::isFunction(arg, "/") && arg->child.size() == 2 &&
+            SimpUtil::isRational(arg->child[1]) &&
+            arg->child[1]->value == Rational(Intg(10))) {
+            Exptree* logNum = SimpUtil::makeFunction(FuncName::log10);
+            logNum->child.push_back(SimpUtil::deepCopy(arg->child[0]));
+            Exptree* result = SimpUtil::makeFunction("+");
+            result->child.push_back(logNum);
+            result->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
             SimpUtil::freeTree(node);
-            return SimpUtil::makeRational(Rational(Intg(-1)));
+            return simplifyAdd(result);
         }
 
-        // Convert to natural log: log10(x) = ln(x)/ln(10)
+        // log10(x^n) = n * log10(x)  (includes sqrt via x^(1/2))
+        if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
+            Exptree* logBase = SimpUtil::makeFunction(FuncName::log10);
+            logBase->child.push_back(SimpUtil::deepCopy(arg->child[0]));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(SimpUtil::deepCopy(arg->child[1]));
+            result->child.push_back(logBase);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
+        // Fallback: log10(x) = ln(x) * ln(10)^(-1)
         Exptree* lnArg = SimpUtil::makeFunction(FuncName::ln);
         lnArg->child.push_back(SimpUtil::deepCopy(arg));
         Exptree* ln10 = SimpUtil::makeFunction(FuncName::ln);

@@ -1,3 +1,22 @@
+/** @file /font2h/font2h.cpp
+ *  @brief Font transformation tool
+ *  @author hdkghc
+ *  @version 0.1
+ *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -45,23 +64,30 @@ static auto start_time = std::chrono::steady_clock::now();
 
 static void log_info(const std::string &msg) {
     auto now = std::chrono::steady_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-    std::cout << COLOR_ORANGE << "[" << ms << "] " << COLOR_GREEN << "info" << COLOR_RESET 
+    auto us = std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
+    std::cout << COLOR_ORANGE << "[" << std::setw(10) << us << "] " << COLOR_GREEN << "info" << COLOR_RESET 
               << " " << msg << "\n";
 }
 
 static void log_gen(const std::string &msg) {
     auto now = std::chrono::steady_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-    std::cout << COLOR_ORANGE << "[" << ms << "] " << COLOR_GREEN << "gen" << COLOR_RESET 
+    auto us = std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
+    std::cout << COLOR_ORANGE << "[" << std::setw(10) << us << "] " << COLOR_GREEN << "gen" << COLOR_RESET 
               << "  " << msg << "\n";
 }
 
 static void log_skip(const std::string &msg) {
     auto now = std::chrono::steady_clock::now();
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count();
-    std::cout << COLOR_ORANGE << "[" << ms << "] " << COLOR_GREEN << "skip" << COLOR_RESET 
+    auto us = std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
+    std::cout << COLOR_ORANGE << "[" << std::setw(10) << us << "] " << COLOR_GREEN << "skip" << COLOR_RESET 
               << " " << msg << "\n";
+}
+
+static void log_progress(int done, int total) {
+    auto now = std::chrono::steady_clock::now();
+    auto us = std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
+    std::cout << COLOR_ORANGE << "[" << std::setw(10) << us << "] " << COLOR_GREEN << "prog" << COLOR_RESET 
+              << " " << done << "/" << total << " (" << (100 * done / total) << "%)\r" << std::flush;
 }
 
 std::string get_safe_font_name(FT_Face face) {
@@ -74,16 +100,32 @@ std::string get_safe_font_name(FT_Face face) {
     return name;
 }
 
-std::string build_subset(const std::map<uint16_t, bool> &chars) {
+std::string build_subset(const std::map<uint32_t, bool> &chars) {
     std::string s;
     for (const auto &p : chars) {
-        uint16_t c = p.first;
-        if (c >= 32 && c <= 126) s += static_cast<char>(c);
+        uint32_t c = p.first;
+        if (c <= 0xFFFF && !(c >= 0xD800 && c <= 0xDFFF)) {
+            if (c <= 0x7F) {
+                s += static_cast<char>(c);
+            } else if (c <= 0x7FF) {
+                s += static_cast<char>(0xC0 | (c >> 6));
+                s += static_cast<char>(0x80 | (c & 0x3F));
+            } else {
+                s += static_cast<char>(0xE0 | (c >> 12));
+                s += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+                s += static_cast<char>(0x80 | (c & 0x3F));
+            }
+        }
     }
     return s;
 }
 
 std::string format_size(uint32_t bytes) {
+    if (bytes >= 1024 * 1024) {
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(1) << (bytes / (1024.0 * 1024.0)) << " MB";
+        return ss.str();
+    }
     if (bytes >= 1024) {
         std::stringstream ss;
         ss << std::fixed << std::setprecision(1) << (bytes / 1024.0) << " KB";
@@ -113,7 +155,7 @@ void generate_header(
     const std::string &font_name, int font_size,
     const std::vector<uint8_t> &bitmaps,
     const std::vector<GFXglyph> &glyphs,
-    const std::map<uint16_t, bool> &char_map,
+    const std::map<uint32_t, bool> &char_map,
     const std::string &out_path
 ) {
     uint32_t bm_sz = bitmaps.size();
@@ -130,21 +172,19 @@ void generate_header(
 
     std::string var = font_name + std::to_string(font_size) + "pt";
     std::string subset = build_subset(char_map);
-    uint16_t first = char_map.begin()->first;
-    uint16_t last = char_map.rbegin()->first;
+    uint16_t first = static_cast<uint16_t>(char_map.begin()->first);
+    uint16_t last  = static_cast<uint16_t>(char_map.rbegin()->first);
     
     uint8_t y_adv = font_size;
-    if (!glyphs.empty()) {
-        for (const auto &g : glyphs) {
-            if (g.height > y_adv) y_adv = g.height;
-        }
+    for (const auto &g : glyphs) {
+        if (g.height > y_adv) y_adv = g.height;
     }
 
     ss << "const uint8_t " << var << "Bitmaps[] PROGMEM = {\n  ";
     for (size_t i = 0; i < bitmaps.size(); ++i) {
-        ss << "0x";
-        if (bitmaps[i] < 16) ss << "0";
-        ss << std::hex << static_cast<int>(bitmaps[i]) << std::dec;
+        ss << "0x" << std::hex << std::uppercase;
+        if (bitmaps[i] < 0x10) ss << "0";
+        ss << static_cast<int>(bitmaps[i]) << std::dec;
         if (i != bitmaps.size() - 1) ss << ", ";
         if ((i + 1) % 12 == 0) ss << "\n  ";
     }
@@ -154,14 +194,18 @@ void generate_header(
     int idx = 0;
     for (const auto &p : char_map) {
         const GFXglyph &g = glyphs[idx++];
-        ss << "  { " << std::setw(4) << g.bitmapOffset << ", "
-          << std::setw(1) << static_cast<int>(g.width) << ", "
-          << std::setw(2) << static_cast<int>(g.height) << ", "
-          << std::setw(1) << static_cast<int>(g.xAdvance) << ", "
-          << std::setw(2) << static_cast<int>(g.xOffset) << ", "
-          << std::setw(2) << static_cast<int>(g.yOffset) << " }, ";
-        ss << "// 0x" << std::hex << p.first << std::dec;
-        if (p.first >= 32 && p.first <= 126) ss << " '" << static_cast<char>(p.first) << "'";
+        ss << "  { " << g.bitmapOffset << ", "
+           << static_cast<int>(g.width) << ", "
+           << static_cast<int>(g.height) << ", "
+           << static_cast<int>(g.xAdvance) << ", "
+           << static_cast<int>(g.xOffset) << ", "
+           << static_cast<int>(g.yOffset) << " }, ";
+        ss << "// U+" << std::hex << std::uppercase;
+        if (p.first < 0x1000) ss << "0";
+        if (p.first < 0x0100) ss << "0";
+        if (p.first < 0x0010) ss << "0";
+        ss << p.first << std::dec;
+        if (p.first >= 0x20 && p.first <= 0x7E) ss << " '" << static_cast<char>(p.first) << "'";
         ss << "\n";
     }
     ss << "};\n\n";
@@ -169,15 +213,24 @@ void generate_header(
     ss << "const GFXfont " << var << " PROGMEM = {\n";
     ss << "  (uint8_t  *)" << var << "Bitmaps,\n";
     ss << "  (GFXglyph *)" << var << "Glyphs,\n";
-    ss << "  0x" << std::hex << first << ", 0x" << last << std::dec << ", "
-      << static_cast<int>(y_adv) << ",\n";
-    std::string chset;
+    ss << "  0x" << std::hex << std::uppercase << first << ", 0x" << last << std::dec << ", "
+       << static_cast<int>(y_adv) << ",\n";
+    std::string chset_esc;
     for (auto u : subset) {
-        if (u == '\\') chset += "\\\\";
-        else if (u == '"') chset += "\\\"";
-        else chset += u;
+        if (u == '\\') chset_esc += "\\\\";
+        else if (u == '"') chset_esc += "\\\"";
+        else if (u == '\n') chset_esc += "\\n";
+        else if (u == '\r') chset_esc += "\\r";
+        else if (u == '\t') chset_esc += "\\t";
+        else if (static_cast<unsigned char>(u) < 0x20) {
+            chset_esc += "\\x";
+            chset_esc += "0123456789ABCDEF"[(unsigned char)u >> 4];
+            chset_esc += "0123456789ABCDEF"[(unsigned char)u & 0x0F];
+        } else {
+            chset_esc += u;
+        }
     }
-    ss << "  \"" << chset << "\"\n";
+    ss << "  \"" << chset_esc << "\"\n";
     ss << "};\n\n";
     
     ss << "// Memory usage:\n";
@@ -216,28 +269,44 @@ int main(int argc, char **argv) {
     std::string font_name = get_safe_font_name(face);
     log_info("Name    " + font_name);
 
-    std::map<uint16_t, bool> char_map;
-
-    // Generate from 0x00 to 0xFF (all 8-bit characters)
-    for (uint16_t c = 0x00; c <= 0xFF; c++) {
-        char_map[c] = true;
+    // Collect all glyphs present in the font (Unicode)
+    std::map<uint32_t, bool> char_map;
+    FT_UInt gindex;
+    FT_ULong charcode = FT_Get_First_Char(face, &gindex);
+    while (gindex != 0) {
+        char_map[charcode] = true;
+        charcode = FT_Get_Next_Char(face, charcode, &gindex);
     }
 
+    // Ensure all ASCII characters (0x00-0x7F) are present
+    for (uint32_t c = 0x00; c <= 0x7F; c++) {
+        if (char_map.find(c) == char_map.end()) {
+            char_map[c] = true; // will be rendered as solid box
+        }
+    }
+
+    int total = char_map.size();
+    log_info("Chars   " + std::to_string(total));
+
     // Box dimensions for missing glyphs
-    const int BOX_W = font_size * 3 / 4;  // height * 3/4
+    const int BOX_W = font_size * 3 / 4;
     const int BOX_H = font_size;
     std::vector<uint8_t> box_bitmap = make_solid_box(BOX_W, BOX_H);
 
     std::vector<uint8_t> bitmaps;
     std::vector<GFXglyph> glyphs;
     uint16_t offset = 0;
-    int char_count = 0;
+    int done = 0;
 
-    for (uint16_t c = 0x00; c <= 0xFF; c++) {
+    for (const auto &p : char_map) {
+        uint32_t c = p.first;
+
+        log_progress(done, total);
+
         FT_UInt gidx = FT_Get_Char_Index(face, c);
-        
-        if (gidx == 0) {
-            // Missing glyph → solid box
+
+        // Missing glyph or load failure → solid box
+        if (gidx == 0 || FT_Load_Glyph(face, gidx, FT_LOAD_RENDER)) {
             GFXglyph box{};
             box.bitmapOffset = offset;
             box.width  = BOX_W;
@@ -249,33 +318,16 @@ int main(int argc, char **argv) {
             bitmaps.insert(bitmaps.end(), box_bitmap.begin(), box_bitmap.end());
             glyphs.push_back(box);
             offset += static_cast<uint16_t>(box_bitmap.size());
-            char_count++;
+            done++;
 
             std::stringstream ss;
-            ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c
-               << std::dec << " → box";
-            log_skip(ss.str());
-            continue;
-        }
-
-        if (FT_Load_Glyph(face, gidx, FT_LOAD_RENDER)) {
-            // Load failed → solid box
-            GFXglyph box{};
-            box.bitmapOffset = offset;
-            box.width  = BOX_W;
-            box.height = BOX_H;
-            box.xAdvance = BOX_W;
-            box.xOffset  = 0;
-            box.yOffset  = -BOX_H;
-
-            bitmaps.insert(bitmaps.end(), box_bitmap.begin(), box_bitmap.end());
-            glyphs.push_back(box);
-            offset += static_cast<uint16_t>(box_bitmap.size());
-            char_count++;
-
-            std::stringstream ss;
-            ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c
-               << std::dec << " load failed → box";
+            ss << "U+" << std::hex << std::uppercase;
+            if (c < 0x1000) ss << "0";
+            if (c < 0x0100) ss << "0";
+            if (c < 0x0010) ss << "0";
+            ss << c << std::dec;
+            if (c >= 0x20 && c <= 0x7E) ss << " '" << static_cast<char>(c) << "'";
+            ss << " -> box";
             log_skip(ss.str());
             continue;
         }
@@ -307,25 +359,29 @@ int main(int argc, char **argv) {
         bitmaps.insert(bitmaps.end(), buf.begin(), buf.end());
         glyphs.push_back(glyph);
         offset += static_cast<uint16_t>(buf.size());
-        char_count++;
+        done++;
 
         std::stringstream ss;
-        ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << c << std::dec;
-        if (c >= 0x20 && c <= 0x7E)
-            ss << " '" << (char)c << "'";
-        ss << " off=" << std::setw(4) << glyph.bitmapOffset
-           << " w=" << std::setw(2) << w
-           << " h=" << std::setw(2) << h
-           << " sz=" << std::setw(3) << buf.size()
-           << " adv=" << std::setw(2) << glyph.xAdvance;
+        ss << "U+" << std::hex << std::uppercase;
+        if (c < 0x1000) ss << "0";
+        if (c < 0x0100) ss << "0";
+        if (c < 0x0010) ss << "0";
+        ss << c << std::dec;
+        if (c >= 0x20 && c <= 0x7E) ss << " '" << static_cast<char>(c) << "'";
+        ss << " off=" << glyph.bitmapOffset
+           << " w=" << w
+           << " h=" << h
+           << " sz=" << buf.size()
+           << " adv=" << static_cast<int>(glyph.xAdvance);
         log_gen(ss.str());
     }
 
+    std::cout << "\n";
     generate_header(font_name, font_size, bitmaps, glyphs, char_map, out_path);
 
     FT_Done_Face(face);
     FT_Done_FreeType(ft);
     
-    log_info("Done    " + std::to_string(char_count) + " characters");
+    log_info("Done    " + std::to_string(glyphs.size()) + " characters");
     return 0;
 }

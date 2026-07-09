@@ -529,6 +529,29 @@ namespace CAS {
 
         if (exp->value.isInteger()) {
             Intg expNum = exp->value.numerator();
+
+            // 10^n: fast path using string construction
+            if (base->value == Rational(Intg(10)) || base->value == Rational(Intg(-10))) {
+                bool neg = (base->value == Rational(Intg(-10)));
+                if (expNum < Intg(0)) {
+                    // 10^(-n) = 1/10^n
+                    Intg posExp = Intg(0) - expNum;
+                    std::string s(posExp.toInt(), '0');
+                    s = "1" + s;
+                    Intg den(s);
+                    if (neg && (posExp[0] & 1)) den = Intg(0) - den;
+                    return SimpUtil::makeRational(Rational(Intg(1), den));
+                }
+                // 10^n
+                int64_t n = expNum.toInt();
+                std::string s(n, '0');
+                s = "1" + s;
+                Intg result(s);
+                if (neg && (n & 1)) result = Intg(0) - result;
+                return SimpUtil::makeRational(Rational(result));
+            }
+
+            // General case
             if (expNum < Intg(0)) {
                 Intg posExp = Intg(0) - expNum;
                 Intg baseNum = base->value.numerator();
