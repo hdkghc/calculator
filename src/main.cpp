@@ -184,8 +184,8 @@ int main() {
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
             sleep_ms(20);
             gpio_put(PICO_DEFAULT_LED_PIN, 1);
-            display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
-                            expb.exp.c_str(), ((expb.flg & 7) == 0) ? ((uint16_t)Color::ORANGE) : RGB111_to_RGB565(expb.flg & M_ALPHA, expb.flg & M_SHIFT, expb.flg & M_CTRL));
+            display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
+                            ((expb.flg & 7) == 0) ? ((uint16_t)Color::ORANGE) : RGB111_to_RGB565(expb.flg & M_ALPHA, expb.flg & M_SHIFT, expb.flg & M_CTRL), expb.exp.c_str());
             display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12, (expb.flg & M_INSERT) ? (uint16_t)Color::PURPLE : (uint16_t)Color::ORANGE);
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
             if(r == B_EXEC) {
@@ -199,9 +199,9 @@ int main() {
                 display.ClearScreen(0x0000);
                 printExpr(ss, st);
                 // printExpr(ss, expt);
-                SimpUtil::freeTree(expt);
-                display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
-                            ss.str().c_str(), ((uint16_t)Color::ORANGE));
+                // SimpUtil::freeTree(expt);
+                display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
+                            ((uint16_t)Color::ORANGE), ss.str().c_str());
                 SimpUtil::freeTree(st);
             }
             if(r == B_EXPAND) {
@@ -211,15 +211,15 @@ int main() {
                 if(expt == nullptr) {
                     ss << Parser::getError();
                 }
-                st = TreeSimplifier::simplify(expt);
-                Exptree *ep = TreeExpander::expand(st);
+                Exptree *ep = TreeExpander::expand(expt);
+                st = TreeSimplifier::simplify(ep);
                 display.ClearScreen(0x0000);
-                printExpr(ss, ep);
+                printExpr(ss, st);
                 // printExpr(ss, expt);
-                SimpUtil::freeTree(expt);
-                display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
-                            ss.str().c_str(), ((uint16_t)Color::ORANGE));
-                SimpUtil::freeTree(st);
+                // SimpUtil::freeTree(expt);
+                display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
+                            ((uint16_t)Color::ORANGE), ss.str().c_str());
+                // SimpUtil::freeTree(st);
                 SimpUtil::freeTree(ep);
             }
         }

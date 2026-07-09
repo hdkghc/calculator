@@ -155,7 +155,7 @@ namespace CAS {
 
             Exptree* parseAssign() {
                 Exptree* left = parseComma(); if (!left) return nullptr;
-                while (!_eof()) {
+                while (!_eof() && !_isBlockR() && !_isBlockL()) {
                     if (_peek() == '=') {
                         _advance();
                         Exptree* r = parseAssign(); if (!r) { delete left; return nullptr; }
@@ -220,7 +220,7 @@ namespace CAS {
 
             Exptree* parseAddSub() {
                 Exptree* left = parseMulDiv(); if (!left) return nullptr;
-                while (!_eof()) {
+                while (!_eof() && !_isBlockR() && !_isBlockL()) {
                     uint8_t c = _peek();
                     if (c == '+' || c == '-') {
                         _advance();
@@ -233,7 +233,7 @@ namespace CAS {
 
             Exptree* parseMulDiv() {
                 Exptree* left = parseUnary(); if (!left) return nullptr;
-                while (!_eof()) {
+                while (!_eof() && !_isBlockR() && !_isBlockL()) {
                     uint8_t c = _peek();
                     if (c == '*' || c == '/') {
                         _advance();
@@ -306,7 +306,10 @@ namespace CAS {
                 if (_isDigit(c) || (c == '.' && _isDigit(_peek(1)))) return parseNumber();
                 if (c == '0' && (_peek(1) == 'x' || _peek(1) == 'X')) return parseHexNumber();
                 if (_isIdStart(c)) return parseVariable();
-                if (c >= 0x01 && c <= 0x06) return parseEnrichedToken();
+                if (c >= 0x01 && c <= 0x06) {
+                    if (c == 0x03) return nullptr; // block boundary
+                    return parseEnrichedToken();
+                }
                 if (c == '(') return parseParenGroup();
                 if (c == ' ') { _advance(); return parseAtom(); }
                 _setError(std::string("Unexpected character '") + (char)c + "'");

@@ -278,11 +278,11 @@ namespace Keypad {
                 if (k == Ctrl::CTRL)  { flg ^= M_CTRL; flg &= ~M_LOCK; return B_SUCCESS; }
                 if (k == Ctrl::LOCK)  { flg ^= M_LOCK; return B_SUCCESS; }
                 if (k == Ctrl::INS)   { flg ^= M_INSERT; flg &= ~M_SHIFT; return B_SUCCESS; }
-                if (k == Ctrl::RCL)   { flg ^= M_RCL; flg &= ~M_SHIFT; flg &= ~M_CTRL; return B_SUCCESS; }
+                if (k == Ctrl::RCL)   { flg ^= M_RCL; _rel(); return B_SUCCESS; }
 
                 // ----- Undo / Redo (full state snapshot) ------------------------
-                if (k == Ctrl::UNDO) return _undo();
-                if (k == Ctrl::REDO) return _redo();
+                if (k == Ctrl::UNDO) { _rel(); return _undo(); }
+                if (k == Ctrl::REDO) { _rel(); return _redo(); }
 
                 // ----- Global controls ------------------------------------------
                 if (k == Ctrl::ON)  return B_RESET;
@@ -303,22 +303,22 @@ namespace Keypad {
                 if (k == Ctrl::DEL) { _saveState(); return _del(); }
 
                 // ----- Execution ------------------------------------------------
-                if (k == Ctrl::EXE || k == Ctrl::OK) return B_EXEC;
+                if (k == Ctrl::EXE || k == Ctrl::OK) { _rel(); return B_EXEC; }
 
                 // ----- Menu / system keys (no undo needed) ----------------------
-                if (k == Ctrl::MENU)    return B_MENU;
-                if (k == Ctrl::MODE)    return B_MODE;
-                if (k == Ctrl::SET)     return B_SET;
-                if (k == Ctrl::CLR)     return B_CLEAR;
-                if (k == Ctrl::ABOUT)   return B_ABOUT;
-                if (k == Ctrl::FMT)     return B_FMT;
-                if (k == Ctrl::OPTN)    return B_OPTN;
-                if (k == Ctrl::CONV)    return B_CONV;
-                if (k == Ctrl::CONST)   return B_CONST;
-                if (k == Ctrl::SOLV)    return B_SOLVE;
-                if (k == Ctrl::CALC)    return B_CALC;
-                if (k == Ctrl::FACTOR)  return B_FACTOR;
-                if (k == Ctrl::EXPAND)  return B_EXPAND;
+                if (k == Ctrl::MENU)    { _rel(); return B_MENU; }
+                if (k == Ctrl::MODE)    { _rel(); return B_MODE; }
+                if (k == Ctrl::SET)     { _rel(); return B_SET; }
+                if (k == Ctrl::CLR)     { _rel(); return B_CLEAR; }
+                if (k == Ctrl::ABOUT)   { _rel(); return B_ABOUT; }
+                if (k == Ctrl::FMT)     { _rel(); return B_FMT; }
+                if (k == Ctrl::OPTN)    { _rel(); return B_OPTN; }
+                if (k == Ctrl::CONV)    { _rel(); return B_CONV; }
+                if (k == Ctrl::CONST)   { _rel(); return B_CONST; }
+                if (k == Ctrl::SOLV)    { _rel(); return B_SOLVE; }
+                if (k == Ctrl::CALC)    { _rel(); return B_CALC; }
+                if (k == Ctrl::FACTOR)  { _rel(); return B_FACTOR; }
+                if (k == Ctrl::EXPAND)  { _rel(); return B_EXPAND; }
 
                 // ----- Insertions (state-changing → save undo) ------------------
                 _saveState();
@@ -330,10 +330,10 @@ namespace Keypad {
                 if (k.size() >= 1 && (uint8_t)k[0] == 0x03) return B_ERROR;
 
                 // GUI-edited objects (deferred to external editor)
-                if (k == CAS::FuncName::vector)  return B_VECDEF;
-                if (k == CAS::FuncName::matrix)  return B_MATDEF;
-                if (k == CAS::FuncName::plot2d)  return B_PLOT2D;
-                if (k == CAS::FuncName::plot3d)  return B_PLOT3D;
+                if (k == CAS::FuncName::vector)  { _rel(); return B_VECDEF; }
+                if (k == CAS::FuncName::matrix)  { _rel(); return B_MATDEF; }
+                if (k == CAS::FuncName::plot2d)  { _rel(); return B_PLOT2D; }
+                if (k == CAS::FuncName::plot3d)  { _rel(); return B_PLOT3D; }
 
                 // Spec symbol → ASCII substitution
                 if (k == Spec::SQ)  { _ins("^2");     return B_SUCCESS; }
@@ -394,7 +394,6 @@ namespace Keypad {
             struct Snapshot {
                 std::string exp;  ///< Expression string
                 int16_t     cp;   ///< Cursor position
-                uint8_t     flg;  ///< Modifier flags
             };
 
             std::vector<Snapshot> _undoStack; ///< Stack of previous states
@@ -410,7 +409,7 @@ namespace Keypad {
             void _saveState() {
                 if (_undoStack.size() >= MAX_UNDO)
                     _undoStack.erase(_undoStack.begin());
-                _undoStack.push_back({exp, cp, flg});
+                _undoStack.push_back({exp, cp});
                 _redoStack.clear();
             }
 
@@ -420,9 +419,9 @@ namespace Keypad {
              */
             uint8_t _undo() {
                 if (_undoStack.empty()) return B_ERROR;
-                _redoStack.push_back({exp, cp, flg});
+                _redoStack.push_back({exp, cp});
                 Snapshot &s = _undoStack.back();
-                exp = s.exp; cp = s.cp; flg = s.flg;
+                exp = s.exp; cp = s.cp; flg = 0;
                 _undoStack.pop_back();
                 return B_SUCCESS;
             }
@@ -433,9 +432,9 @@ namespace Keypad {
              */
             uint8_t _redo() {
                 if (_redoStack.empty()) return B_ERROR;
-                _undoStack.push_back({exp, cp, flg});
+                _undoStack.push_back({exp, cp});
                 Snapshot &s = _redoStack.back();
-                exp = s.exp; cp = s.cp; flg = s.flg;
+                exp = s.exp; cp = s.cp;
                 _redoStack.pop_back();
                 return B_SUCCESS;
             }
@@ -734,53 +733,37 @@ namespace Keypad {
              *          or multi-byte constant/variable.
              */
             uint8_t _boxedFuncAbsorb(const std::string &fn, int n) {
-                // Use _scanOp / _scanOpBack for proper operand detection
-                int16_t beforeStart = _scanOpBack(cp);
-                int16_t afterEnd    = _scanOp(cp);
+                bool doInsert = (flg & M_INSERT);
+                int16_t beforeStart = cp, afterEnd = cp;
+                std::string before, after;
 
-                std::string before = (beforeStart < cp)
-                                    ? exp.substr(beforeStart, cp - beforeStart) : "";
-                std::string after  = (afterEnd > cp)
-                                    ? exp.substr(cp, afterEnd - cp) : "";
+                if (n == 2 && fn != CAS::FuncName::log) {
+                    beforeStart = _scanOpBack(cp);
+                    afterEnd    = _scanOp(cp);
+                    before = (beforeStart < cp) ? exp.substr(beforeStart, cp - beforeStart) : "";
+                    after  = (afterEnd > cp)    ? exp.substr(cp, afterEnd - cp)       : "";
+                } else if (doInsert) {
+                    afterEnd = _scanOp(cp);
+                    after = (afterEnd > cp) ? exp.substr(cp, afterEnd - cp) : "";
+                    if (after.empty()) { flg &= ~M_INSERT; doInsert = false; }
+                }
 
-                bool doInsert = (flg & M_INSERT) && !after.empty();
-
-                // Remove absorbed content
                 if (afterEnd > cp)       exp.erase(cp, afterEnd - cp);
                 if (beforeStart < cp)    { exp.erase(beforeStart, cp - beforeStart); cp = beforeStart; }
 
                 int16_t insPos = cp;
                 std::string s = fn;
-
                 if (n == 1) {
-                    // Single block: after-operand goes into the box
                     s += Ctrl::BLOCKL; s += after; s += Ctrl::BLOCKR;
-                } else if (doInsert) {
-                    // Insert mode: after → block 0, before → block 1
-                    s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;
-                    s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;
-                    for (int i = 2; i < n; i++) { s += Ctrl::BLOCKL; s += Ctrl::BLOCKR; }
                 } else {
-                    // Normal: before → block 0, after → block 1
                     s += Ctrl::BLOCKL; s += before; s += Ctrl::BLOCKR;
                     s += Ctrl::BLOCKL; s += after;  s += Ctrl::BLOCKR;
                     for (int i = 2; i < n; i++) { s += Ctrl::BLOCKL; s += Ctrl::BLOCKR; }
                 }
                 _raw(s);
+                cp = insPos + (int16_t)fn.size() + BLKLEN;
 
-                // Cursor positioning
-                if (n == 1) {
-                    cp = insPos + (int16_t)fn.size() + BLKLEN;
-                } else if (doInsert) {
-                    cp = insPos + (int16_t)fn.size() + BLKLEN
-                        + (int16_t)after.size() + BLKLEN + BLKLEN;
-                    flg &= ~M_INSERT;
-                } else if (after.empty() && !before.empty()) {
-                    cp = insPos + (int16_t)fn.size() + BLKLEN
-                        + (int16_t)before.size() + BLKLEN + BLKLEN;
-                } else {
-                    cp = insPos + (int16_t)fn.size() + BLKLEN;
-                }
+                if (doInsert) flg &= ~M_INSERT;
                 _rel();
                 return B_SUCCESS;
             }

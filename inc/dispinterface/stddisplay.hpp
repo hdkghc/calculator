@@ -519,6 +519,251 @@ namespace Display {
         }
 
         /**
+        * @brief Draw formatted text with automatic word wrap and color support
+        * 
+        * Renders a formatted string at the specified position using a given font.
+        * Supports automatic line wrapping when text exceeds TFT_WIDTH and stops
+        * drawing when cursor exceeds TFT_HEIGHT.
+        * 
+        * @param x Starting X coordinate (left edge of text)
+        * @param y Starting Y coordinate (top edge of text)
+        * @param font Pointer to GFXfont structure. If NULL, function returns immediately
+        * @param scale Font scaling factor (1 = normal size, 2 = double size, etc.)
+        * @param format Format string with supported specifiers:
+        *        - %d: Signed integer
+        *        - %s: Null-terminated string
+        *        - %c: Single character
+        *        - %l: Set drawing color (takes uint16_t argument)
+        * @param ... Variable arguments matching the format specifiers
+        * 
+        * @note Special characters in format string:
+        *       - '\\n' forces a line break
+        *       - '\\r' is ignored
+        *       - Automatic line wrap occurs when cursor_x >= TFT_WIDTH
+        * 
+        * @warning Requires TFT_WIDTH and TFT_HEIGHT to be defined macros
+        * @warning Requires GFXfont structure with valid glyph array
+        * 
+        * @example
+        * @code
+        * // Basic text drawing
+        * DrawTextF(10, 20, &myFont, 1, "Hello %s!", "World");
+        * 
+        * // Color switching
+        * DrawTextF(10, 20, &myFont, 1, "%lError:%l %s", RED, WHITE, "File not found");
+        * 
+        * // Mixed formats with automatic wrapping
+        * DrawTextF(0, 0, &myFont, 2, "Score: %d\nPlayer: %s", 100, "Player1");
+        * @endcode
+        */
+        void DrawTextF(uint8_t x, uint8_t y, const GFXfont *font, uint8_t scale,
+                    std::string format, ...) {
+            // Return immediately if font is invalid
+            if (!font) return;
+
+            // Initialize variable argument list
+            va_list args;
+            va_start(args, format);
+
+            // Cursor position tracking
+            uint8_t cursor_x = x;
+            uint8_t cursor_y = y;
+            
+            // Default drawing color (white)
+            uint16_t color = 0xFFFF;
+
+            // Pointer to traverse the format string
+            const char* fmt = format.c_str();
+            
+            // Parse and render each character in the format string
+            while (*fmt) {
+                // Check for format specifier
+                if (*fmt == '%' && *(fmt + 1)) {
+                    fmt++; // Skip the '%' character
+                    
+                    // Process different format specifiers
+                    switch (*fmt) {
+                        case 'd': {
+                            // Integer format specifier
+                            int val = va_arg(args, int);
+                            char buf[32];
+                            snprintf(buf, sizeof(buf), "%d", val);
+                            
+                            // Draw each digit character
+                            for (char* p = buf; *p; p++) {
+                                // Stop if exceeded display height
+                                if (cursor_y >= TFT_HEIGHT) {
+                                    va_end(args);
+                                    return;
+                                }
+                                
+                                // Render single character
+                                DrawChar(cursor_x, cursor_y, *p, font, scale, color);
+                                
+                                // Advance cursor by character width
+                                uint16_t idx = *p - font->first;
+                                if (idx <= (font->last - font->first)) {
+                                    cursor_x += font->glyph[idx].xAdvance * scale;
+                                }
+                                
+                                // Check for automatic line wrap
+                                if (cursor_x >= TFT_WIDTH) {
+                                    cursor_x = x;
+                                    cursor_y += font->yAdvance * scale;
+                                }
+                            }
+                            break;
+                        }
+                        
+                        case 's': {
+                            // String format specifier
+                            const char* str = va_arg(args, const char*);
+                            
+                            // Draw each character of the string
+                            while (*str) {
+                                // Stop if exceeded display height
+                                if (cursor_y >= TFT_HEIGHT) {
+                                    va_end(args);
+                                    return;
+                                }
+                                
+                                // Handle newline character
+                                if (*str == '\n') {
+                                    cursor_x = x;
+                                    cursor_y += font->yAdvance * scale;
+                                } 
+                                // Skip carriage return
+                                else if (*str != '\r') {
+                                    // Render character
+                                    DrawChar(cursor_x, cursor_y, *str, font, scale, color);
+                                    
+                                    // Advance cursor position
+                                    uint16_t idx = *str - font->first;
+                                    if (idx <= (font->last - font->first)) {
+                                        cursor_x += font->glyph[idx].xAdvance * scale;
+                                    }
+                                    
+                                    // Check for automatic line wrap
+                                    if (cursor_x >= TFT_WIDTH) {
+                                        cursor_x = x;
+                                        cursor_y += font->yAdvance * scale;
+                                    }
+                                }
+                                str++;
+                            }
+                            break;
+                        }
+                        
+                        case 'c': {
+                            // Character format specifier
+                            char ch = (char)va_arg(args, int);
+                            
+                            // Stop if exceeded display height
+                            if (cursor_y >= TFT_HEIGHT) {
+                                va_end(args);
+                                return;
+                            }
+                            
+                            // Render single character
+                            DrawChar(cursor_x, cursor_y, ch, font, scale, color);
+                            
+                            // Advance cursor position
+                            uint16_t idx = ch - font->first;
+                            if (idx <= (font->last - font->first)) {
+                                cursor_x += font->glyph[idx].xAdvance * scale;
+                            }
+                            
+                            // Check for automatic line wrap
+                            if (cursor_x >= TFT_WIDTH) {
+                                cursor_x = x;
+                                cursor_y += font->yAdvance * scale;
+                            }
+                            break;
+                        }
+                        
+                        case 'l': {
+                            // Color set format specifier (custom, uint16_t)
+                            color = (uint16_t)va_arg(args, unsigned int);
+                            break;
+                        }
+                        
+                        default: {
+                            // Unknown format specifier, output literal characters
+                            if (cursor_y >= TFT_HEIGHT) {
+                                va_end(args);
+                                return;
+                            }
+                            
+                            // Draw the '%' character
+                            DrawChar(cursor_x, cursor_y, '%', font, scale, color);
+                            uint16_t idx = '%' - font->first;
+                            if (idx <= (font->last - font->first)) {
+                                cursor_x += font->glyph[idx].xAdvance * scale;
+                            }
+                            
+                            // Check wrap after '%'
+                            if (cursor_x >= TFT_WIDTH) {
+                                cursor_x = x;
+                                cursor_y += font->yAdvance * scale;
+                            }
+                            
+                            // Draw the character following '%'
+                            if (cursor_y < TFT_HEIGHT) {
+                                DrawChar(cursor_x, cursor_y, *fmt, font, scale, color);
+                                idx = *fmt - font->first;
+                                if (idx <= (font->last - font->first)) {
+                                    cursor_x += font->glyph[idx].xAdvance * scale;
+                                }
+                                
+                                // Check wrap after literal character
+                                if (cursor_x >= TFT_WIDTH) {
+                                    cursor_x = x;
+                                    cursor_y += font->yAdvance * scale;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                } else {
+                    // Regular character (not a format specifier)
+                    
+                    // Stop if exceeded display height
+                    if (cursor_y >= TFT_HEIGHT) {
+                        va_end(args);
+                        return;
+                    }
+                    
+                    // Handle special control characters
+                    if (*fmt == '\n') {
+                        // Line break: reset X, advance Y
+                        cursor_x = x;
+                        cursor_y += font->yAdvance * scale;
+                    } else if (*fmt != '\r') {
+                        // Draw normal character (ignore carriage return)
+                        DrawChar(cursor_x, cursor_y, *fmt, font, scale, color);
+                        
+                        // Advance cursor by character width
+                        uint16_t idx = *fmt - font->first;
+                        if (idx <= (font->last - font->first)) {
+                            cursor_x += font->glyph[idx].xAdvance * scale;
+                        }
+                        
+                        // Automatic line wrap when exceeding display width
+                        if (cursor_x >= TFT_WIDTH) {
+                            cursor_x = x;
+                            cursor_y += font->yAdvance * scale;
+                        }
+                    }
+                }
+                // Move to next character in format string
+                fmt++;
+            }
+
+            // Clean up variable argument list
+            va_end(args);
+        }
+
+        /**
          * @brief Draw a string using a GFX font with scaling
          */
         void DrawTextC(uint8_t x, uint8_t y, const GFXfont *font, uint8_t scale,
