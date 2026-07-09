@@ -476,20 +476,26 @@ namespace CAS {
             }
 
             Exptree* _makeRational(const std::string &str, int base = 10) {
-                Exptree* node = new Exptree(); node->valtp = Exptree::val_t::valRational;
+                Exptree* node = new Exptree();
+                node->valtp = Exptree::val_t::valRational;
                 if (base == 16) {
-                    int64_t val = 0;
-                    for (char c : str) { val *= 16; val += (c<='9') ? c-'0' : (c<='F' ? c-'A'+10 : c-'a'+10); }
+                    Intg val(0);
+                    for (char c : str) { val = val * Intg(16) + Intg(c<='9' ? c-'0' : (c<='F' ? c-'A'+10 : c-'a'+10)); }
                     node->value = Rational(val);
                 } else {
                     size_t dot = str.find('.');
-                    if (dot == std::string::npos) node->value = Rational(std::stoll(str));
-                    else {
-                        std::string ip = str.substr(0, dot), fp = str.substr(dot+1);
-                        if (fp.empty()) node->value = Rational(std::stoll(ip));
-                        else {
-                            int64_t num = std::stoll(ip + fp), den = 1;
-                            for (size_t i = 0; i < fp.size(); i++) den *= 10;
+                    if (dot == std::string::npos) {
+                        node->value = Rational(Intg(str));
+                    } else {
+                        std::string ip = str.substr(0, dot);
+                        std::string fp = str.substr(dot + 1);
+                        while (!fp.empty() && fp.back() == '0') fp.pop_back();
+                        if (fp.empty()) {
+                            node->value = Rational(Intg(ip));
+                        } else {
+                            Intg num(ip + fp);
+                            Intg den(1);
+                            for (size_t i = 0; i < fp.size(); i++) den = den * Intg(10);
                             node->value = Rational(num, den);
                         }
                     }
