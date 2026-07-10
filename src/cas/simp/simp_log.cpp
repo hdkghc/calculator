@@ -238,9 +238,19 @@ namespace CAS {
 
             // Factorize denominator similarly if needed (for fractions)
             if (den > Intg(1)) {
-                // TODO: 
                 // ln(num/den) = ln(num) - ln(den)
-                // Only do this if both are simple
+                Exptree* lnNum = SimpUtil::makeFunction(FuncName::ln);
+                lnNum->child.push_back(SimpUtil::makeRational(Rational(num)));
+                Exptree* lnDen = SimpUtil::makeFunction(FuncName::ln);
+                lnDen->child.push_back(SimpUtil::makeRational(Rational(den)));
+                Exptree* negLnDen = SimpUtil::makeFunction("*");
+                negLnDen->child.push_back(SimpUtil::makeRational(Rational(Intg(-1))));
+                negLnDen->child.push_back(lnDen);
+                Exptree* result = SimpUtil::makeFunction("+");
+                result->child.push_back(lnNum);
+                result->child.push_back(negLnDen);
+                SimpUtil::freeTree(node);
+                return simplifyAdd(result);
             }
         }
 

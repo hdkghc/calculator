@@ -487,13 +487,17 @@ namespace Keypad {
             int _firstBlockL(const std::vector<Token> &toks, int blkTi) const {
                 int firstLi = blkTi, depth = 0;
                 for (int i = blkTi - 1; i >= 0; i--) {
-                    if (toks[i].type == TokType::CTRL &&
-                        exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
-                        depth++;
-                    } else if (toks[i].type == TokType::CTRL &&
-                            exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
-                        if (depth == 0) { firstLi = i; break; }
-                        else { depth--; if (depth == 0) firstLi = i; }
+                    if (toks[i].type == TokType::CTRL) {
+                        if (exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                            depth++;
+                        } else if (exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                            if (depth == 0) { firstLi = i; break; }
+                            else { depth--; if (depth == 0) firstLi = i; }
+                        }
+                    } else {
+                        // Non-CTRL token (e.g. nested function name):
+                        // boundary of the current box structure.
+                        break;
                     }
                 }
                 return firstLi;
@@ -510,19 +514,21 @@ namespace Keypad {
             int _boxedPrefix(const std::vector<Token> &toks, int blkTi) const {
                 int firstLi = blkTi, depth = 0;
                 for (int i = blkTi - 1; i >= 0; i--) {
-                    if (toks[i].type == TokType::CTRL &&
-                        exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
-                        depth++;
-                    } else if (toks[i].type == TokType::CTRL &&
-                            exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
-                        if (depth == 0) { firstLi = i; break; }
-                        else { depth--; if (depth == 0) firstLi = i; }
+                    if (toks[i].type == TokType::CTRL) {
+                        if (exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                            depth++;
+                        } else if (exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                            if (depth == 0) { firstLi = i; break; }
+                            else { depth--; if (depth == 0) firstLi = i; }
+                        }
+                    } else {
+                        break;
                     }
                 }
                 if (firstLi <= 0) return -1;
                 if (toks[firstLi - 1].type == TokType::FUNC ||
                     (toks[firstLi - 1].type == TokType::ASCII &&
-                    exp[toks[firstLi - 1].beg] == '^')) return firstLi - 1;
+                        exp[toks[firstLi - 1].beg] == '^')) return firstLi - 1;
                 return -1;
             }
 
@@ -941,25 +947,26 @@ namespace Keypad {
             // =============================================================
 
             /**
-             * @brief  Move cursor by @p delta tokens (+1 right, -1 left).
-             * @param  delta Movement direction and magnitude.
+             * @brief  Move cursor by delta tokens (+1 right, -1 left).
              *
-             * @details Uses tokenisation to guarantee the cursor always
-             *          lands on a valid character boundary.
+             * @details Uses tokenisation so the cursor always lands on a valid
+             *          token boundary.
              *
-             * <b>Right-move special cases:</b>
-             *   • \x01xx( → skip function + '(' as a 4-byte unit.
-             *   • Boxed prefix → enter first block (vector/matrix: skip
-             *     the entire structure).
-             *   • BLOCKR → jump to the next sibling block, or exit the
-             *     boxed structure.
+             * Right-move special cases:
+             *   - \x01xx( → skip function + '(' as a 4-byte unit.
+             *   - Boxed prefix → enter first block (vector/matrix skip whole;
+             *     log enters block 2, i.e. the base, which is the leftmost
+             *     block visually).
+             *   - BLOCKR → next sibling block, or exit boxed structure.
+             *     log: BLOCKR of block 2 (base) → enter block 1 (argument);
+             *          BLOCKR of block 1 → exit (same as normal).
              *
-             * <b>Left-move special cases:</b>
-             *   • '(' bound to \x01 → skip the function name too.
-             *   • BLOCKR → enter the block.  For log, enter the *other*
-             *     block to match the visual log_b(a) layout.
-             *   • BLOCKL → jump to the previous sibling block's content
-             *     end, or to before the prefix.
+             * Left-move special cases:
+             *   - '(' bound to \x01 → skip function name too.
+             *   - BLOCKR → enter the block.
+             *   - BLOCKL → previous sibling block's end, or before prefix.
+             *     log: BLOCKL of block 1 (argument) → enter block 2 (base);
+             *          BLOCKL of block 2 → before prefix (same as normal).
              */
             void _move(int delta) {
                 auto toks = _tok();
@@ -967,7 +974,7 @@ namespace Keypad {
                 int n  = (int)toks.size();
 
                 if (delta > 0) {
-                    // ---- Right movement ----
+                    // ---- Right ----
                     if (ti >= n) return;
                     const Token &t = toks[ti];
 
@@ -977,28 +984,54 @@ namespace Keypad {
                         exp[toks[ti + 1].beg] == '(') {
                         cp = toks[ti + 1].end;
                     }
-                    // Boxed prefix → enter first block (vector/matrix: skip all)
+                    // Boxed structure prefix → enter first visible block
                     else if (_isBoxedPrefix(toks, ti)) {
                         std::string nm = _boxedNameAt(toks, ti);
                         if (nm == CAS::FuncName::vector ||
                             nm == CAS::FuncName::matrix) {
                             cp = _boxedEnd(toks, ti);
+                        } else if (nm == CAS::FuncName::log) {
+                            std::vector<int> blks; int lastRi;
+                            _collectBlocks(toks, ti + 1, blks, lastRi);
+                            if (blks.size() >= 2)
+                                cp = toks[blks[1]].end; // enter block 2 (base)
+                            else
+                                cp = toks[ti + 1].end;
                         } else {
-                            cp = toks[ti + 1].end;
+                            cp = toks[ti + 1].end;      // enter block 1
                         }
                     }
-                    // BLOCKR → next sibling block, or exit
+                    // BLOCKR → next visual block, or exit
                     else if (t.type == TokType::CTRL &&
-                            exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
-                        int nextLi = _nextSiblingBlockL(toks, ti);
-                        if (nextLi >= 0) cp = toks[nextLi].end;
-                        else cp = t.end;
+                             exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
+                        int li = t.pair;
+                        int pi = (li >= 0) ? _boxedPrefix(toks, li) : -1;
+                        std::string nm = (pi >= 0) ? _boxedNameAt(toks, pi) : "";
+                        if (nm == CAS::FuncName::log) {
+                            int idx = _blockIndex(toks, li);
+                            if (idx == 1) {
+                                std::vector<int> blks; int lastRi;
+                                _collectBlocks(toks, _firstBlockL(toks, li), blks, lastRi);
+                                if (blks.size() >= 2)
+                                    cp = toks[blks[0]].end;
+                                else
+                                    cp = t.end;
+                            } else {
+                                std::vector<int> blks; int lastRi;
+                                _collectBlocks(toks, _firstBlockL(toks, li), blks, lastRi);
+                                cp = toks[lastRi].end;
+                            }
+                        } else {
+                            int nextLi = _nextSiblingBlockL(toks, ti);
+                            if (nextLi >= 0) cp = toks[nextLi].end;
+                            else cp = t.end;
+                        }
                     }
                     else {
                         cp = t.end;
                     }
                 } else {
-                    // ---- Left movement ----
+                    // ---- Left ----
                     if (ti <= 0) { cp = 0; return; }
                     const Token &t = toks[ti - 1];
 
@@ -1007,11 +1040,9 @@ namespace Keypad {
                         ti - 2 >= 0 && toks[ti - 2].type == TokType::FUNC) {
                         cp = toks[ti - 2].beg;
                     }
-                    // BLOCKR → enter the block
-                    // log: BLOCKR always jumps to the OTHER block to match
-                    //      the visual log_b(a) layout
+                    // BLOCKR → enter the block (content end or after BLOCKL if empty)
                     else if (t.type == TokType::CTRL &&
-                            exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
+                             exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
                         int li = t.pair;
                         if (li >= 0) {
                             int pi = _boxedPrefix(toks, li);
@@ -1020,26 +1051,68 @@ namespace Keypad {
                                 _jumpToOtherBlockEnd(toks, li);
                             } else {
                                 cp = (toks[li].end == toks[ti - 1].beg)
-                                    ? toks[li].end       // empty → after BLOCKL
-                                    : toks[ti - 1].beg;  // end of content
+                                     ? toks[li].end
+                                     : toks[ti - 1].beg;
                             }
                         } else {
                             cp = t.beg;
                         }
                     }
-                    // BLOCKL → previous block's end, or before prefix
+                    // BLOCKL → previous visual block, or before prefix
                     else if (t.type == TokType::CTRL &&
-                            exp[t.beg + 1] == Ctrl::BLOCKL[1]) {
-                        int prevRi = _prevSiblingBlockR(toks, ti - 1);
-                        if (prevRi >= 0) {
-                            int prevLi = toks[prevRi].pair;
-                            cp = (prevLi >= 0 &&
-                                toks[prevLi].end == toks[prevRi].beg)
-                                ? toks[prevLi].end       // prev empty
-                                : toks[prevRi].beg;      // end of prev content
+                             exp[t.beg + 1] == Ctrl::BLOCKL[1]) {
+                        int pi = _boxedPrefix(toks, ti - 1);
+                        std::string nm = (pi >= 0) ? _boxedNameAt(toks, pi) : "";
+                        if (nm == CAS::FuncName::log) {
+                            int idx = _blockIndex(toks, ti - 1);
+                            if (idx == 0) {
+                                // BLOCKL of block 1 (argument) → enter block 2 (base)
+                                std::vector<int> blks; int lastRi;
+                                _collectBlocks(toks, _firstBlockL(toks, ti - 1), blks, lastRi);
+                                if (blks.size() >= 2) {
+                                    int otherRi = toks[blks[1]].pair;
+                                    cp = (toks[blks[1]].end == toks[otherRi].beg)
+                                         ? toks[blks[1]].end
+                                         : toks[otherRi].beg;
+                                }
+                            } else {
+                                // BLOCKL of block 2 (base)
+                                int ri = toks[ti - 1].pair; // BLOCKR of this block
+                                if (ri >= 0 && toks[ti - 1].end == toks[ri].beg) {
+                                    // block 2 is empty: jump to the end of block 1
+                                    _jumpToOtherBlockEnd(toks, ti - 1);
+                                } else {
+                                    // block 2 has content: exit before prefix
+                                    cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                                }
+                            }
                         } else {
-                            int pi = _boxedPrefix(toks, ti - 1);
-                            cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                            int prevRi = _prevSiblingBlockR(toks, ti - 1);
+                            if (prevRi >= 0) {
+                                int prevLi = toks[prevRi].pair;
+                                cp = (prevLi >= 0 &&
+                                      toks[prevLi].end == toks[prevRi].beg)
+                                     ? toks[prevLi].end
+                                     : toks[prevRi].beg;
+                            } else {
+                                // Check if nested inside an outer box
+                                int depth = 0;
+                                int outerL = -1;
+                                for (int j = pi - 1; j >= 0; j--) {
+                                    if (toks[j].type == TokType::CTRL &&
+                                        exp[toks[j].beg + 1] == Ctrl::BLOCKR[1]) depth++;
+                                    else if (toks[j].type == TokType::CTRL &&
+                                             exp[toks[j].beg + 1] == Ctrl::BLOCKL[1]) {
+                                        if (depth == 0) { outerL = j; break; }
+                                        else depth--;
+                                    }
+                                }
+                                if (outerL >= 0) {
+                                    cp = toks[outerL].end;
+                                } else {
+                                    cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                                }
+                            }
                         }
                     }
                     else {
