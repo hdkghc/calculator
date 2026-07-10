@@ -22,6 +22,71 @@
 
 namespace CAS {
 
+    // ========== Helper ==========
+
+    /**
+     *  @brief Check if an Intg is a power of 10 (1 followed by zeros)
+     *  @param n      The integer to check
+     *  @param power  Output: the exponent (e.g. 1000 → power=3)
+     *  @return true if n = 10^k for some k >= 0
+     */
+    static bool isPowerOf10(Intg n, Intg &power) {
+        if (n <= Intg(0)) return false;
+        std::string s = (std::string)n;
+        if (s[0] != '1') return false;
+        for (size_t i = 1; i < s.size(); i++) {
+            if (s[i] != '0') return false;
+        }
+        power = Intg((int64_t)(s.size() - 1));
+        return true;
+    }
+
+    /**
+     *  @brief Extract factor base^k from a rational number
+     *  @param num    Numerator
+     *  @param den    Denominator
+     *  @param base   The base to factor out
+     *  @param power  Output: the exponent k extracted
+     *  @param remNum Output: remaining numerator after factoring
+     *  @param remDen Output: remaining denominator after factoring
+     *  @return true if any factors were extracted (power > 0)
+     */
+    static bool extractBasePower(Intg num, Intg den,
+                                  Intg base, Intg &power,
+                                  Intg &remNum, Intg &remDen) {
+        power = Intg(0);
+        remNum = num;
+        remDen = den;
+        if (base <= Intg(1)) return false;
+
+        Intg maxIter(100000);
+
+        // Factor from numerator
+        while (remNum > Intg(1) && power < maxIter) {
+            auto dr = remNum.divmod(base);
+            if (dr.second != Intg(0)) break;
+            remNum = dr.first;
+            power = power + Intg(1);
+        }
+
+        // Factor from denominator (if numerator exhausted)
+        if (remNum == Intg(1) && remDen > Intg(1)) {
+            Intg denPower(0);
+            while (remDen > Intg(1) && (power + denPower) < maxIter) {
+                auto dr = remDen.divmod(base);
+                if (dr.second != Intg(0)) break;
+                remDen = dr.first;
+                denPower = denPower + Intg(1);
+            }
+            if (denPower > Intg(0)) {
+                power = power - denPower;
+                return true;
+            }
+        }
+
+        return power > Intg(0);
+    }
+
     // ========== Ln ==========
 
     Exptree* TreeSimplifier::simplifyLn(Exptree* node) {
@@ -244,6 +309,60 @@ namespace CAS {
             return log10Node;
         }
 
+        // log(rational, integer_base): try to factor out base^k
+        if (base && SimpUtil::isRational(arg) && SimpUtil::isInteger(base)) {
+            Intg b = base->value.numerator();
+            if (b > Intg(1)) {
+                Intg num = arg->value.numerator();
+                Intg den = arg->value.den;
+                Intg power, remNum, remDen;
+                if (extractBasePower(num, den, b, power, remNum, remDen)) {
+                    // arg = base^power * (remNum/remDen)
+                    Exptree* logRem = SimpUtil::makeFunction(FuncName::log);
+                    logRem->child.push_back(SimpUtil::makeRational(Rational(remNum, remDen)));
+                    logRem->child.push_back(SimpUtil::deepCopy(base));
+                    Exptree* result;
+                    if (power == Intg(1)) {
+                        result = SimpUtil::makeFunction("+");
+                        result->child.push_back(SimpUtil::makeRational(Rational(Intg(1))));
+                        result->child.push_back(logRem);
+                    } else {
+                        result = SimpUtil::makeFunction("+");
+                        result->child.push_back(SimpUtil::makeRational(Rational(power)));
+                        result->child.push_back(logRem);
+                    }
+                    SimpUtil::freeTree(node);
+                    return simplifyAdd(result);
+                }
+            }
+        }
+
+        // log(a*b, base) = log(a, base) + log(b, base)
+        if (SimpUtil::isFunction(arg, "*")) {
+            Exptree* sum = SimpUtil::makeFunction("+");
+            for (size_t i = 0; i < arg->child.size(); ++i) {
+                Exptree* logTerm = SimpUtil::makeFunction(FuncName::log);
+                logTerm->child.push_back(SimpUtil::deepCopy(arg->child[i]));
+                if (base) logTerm->child.push_back(SimpUtil::deepCopy(base));
+                sum->child.push_back(logTerm);
+            }
+            SimpUtil::freeTree(node);
+            return simplifyAdd(sum);
+        }
+
+        // log(a^b, base) = b * log(a, base)
+        if (SimpUtil::isFunction(arg, "^") && arg->child.size() == 2) {
+            Exptree* b = SimpUtil::deepCopy(arg->child[1]);
+            Exptree* logA = SimpUtil::makeFunction(FuncName::log);
+            logA->child.push_back(SimpUtil::deepCopy(arg->child[0]));
+            if (base) logA->child.push_back(SimpUtil::deepCopy(base));
+            Exptree* result = SimpUtil::makeFunction("*");
+            result->child.push_back(b);
+            result->child.push_back(logA);
+            SimpUtil::freeTree(node);
+            return simplifyMul(result);
+        }
+
         // Convert to natural log: log_b(a) = ln(a)/ln(b)
         if (base) {
             Exptree* lnArg = SimpUtil::makeFunction(FuncName::ln);
@@ -286,33 +405,26 @@ namespace CAS {
             return SimpUtil::makeRational(Rational(Intg(1)));
         }
 
-        // log10(10^k) = k  for rational 10^k (e.g. 100, 0.01, ...)
+        // log10(rational): factor out 10^k
         if (SimpUtil::isRational(arg)) {
             Intg num = arg->value.numerator();
             Intg den = arg->value.den;
-            Intg ten(10), power(0);
-            bool isPow10 = true;
-            Intg tmp = num;
-            while (tmp > Intg(1)) {
-                auto dr = tmp.divmod(ten);
-                if (dr.second != Intg(0)) { isPow10 = false; break; }
-                tmp = dr.first;
-                power = power + Intg(1);
-            }
-            if (isPow10 && den > Intg(1)) {
-                Intg denPower(0);
-                tmp = den;
-                while (tmp > Intg(1)) {
-                    auto dr = tmp.divmod(ten);
-                    if (dr.second != Intg(0)) { isPow10 = false; break; }
-                    tmp = dr.first;
-                    denPower = denPower + Intg(1);
+            Intg power, remNum, remDen;
+
+            if (extractBasePower(num, den, Intg(10), power, remNum, remDen)) {
+                if (remNum == Intg(1) && remDen == Intg(1)) {
+                    // Exact power of 10: log10(10^k) = k
+                    SimpUtil::freeTree(node);
+                    return SimpUtil::makeRational(Rational(power));
                 }
-                if (isPow10) power = power - denPower;
-            }
-            if (isPow10 && num > Intg(0)) {
+                // log10(10^k * m) = k + log10(m)
+                Exptree* logRem = SimpUtil::makeFunction(FuncName::log10);
+                logRem->child.push_back(SimpUtil::makeRational(Rational(remNum, remDen)));
+                Exptree* result = SimpUtil::makeFunction("+");
+                result->child.push_back(SimpUtil::makeRational(Rational(power)));
+                result->child.push_back(logRem);
                 SimpUtil::freeTree(node);
-                return SimpUtil::makeRational(Rational(power));
+                return simplifyAdd(result);
             }
         }
 
@@ -326,16 +438,8 @@ namespace CAS {
                 if (SimpUtil::isRational(kNode)) {
                     Intg num = kNode->value.numerator();
                     Intg den = kNode->value.den;
-                    Intg ten(10), power(0);
-                    bool isPow10 = true;
-                    Intg tmp = num;
-                    while (tmp > Intg(1)) {
-                        auto dr = tmp.divmod(ten);
-                        if (dr.second != Intg(0)) { isPow10 = false; break; }
-                        tmp = dr.first;
-                        power = power + Intg(1);
-                    }
-                    if (isPow10 && den == Intg(1)) {
+                    Intg power;
+                    if (den == Intg(1) && isPowerOf10(num, power)) {
                         Exptree* logOther = SimpUtil::makeFunction(FuncName::log10);
                         logOther->child.push_back(SimpUtil::deepCopy(other));
                         Exptree* result = SimpUtil::makeFunction("+");
