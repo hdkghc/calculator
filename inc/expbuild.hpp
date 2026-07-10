@@ -495,9 +495,8 @@ namespace Keypad {
                             else { depth--; if (depth == 0) firstLi = i; }
                         }
                     } else {
-                        // Non-CTRL token (e.g. nested function name):
-                        // boundary of the current box structure.
-                        break;
+                        // Non-CTRL token: only break if at depth 0
+                        if (depth == 0) break;
                     }
                 }
                 return firstLi;
@@ -522,7 +521,7 @@ namespace Keypad {
                             else { depth--; if (depth == 0) firstLi = i; }
                         }
                     } else {
-                        break;
+                        if (depth == 0) break;
                     }
                 }
                 if (firstLi <= 0) return -1;
@@ -607,32 +606,48 @@ namespace Keypad {
             }
 
             /**
-             * @brief  Find the next sibling BLOCKL after a BLOCKR.
+             * @brief  Find the previous sibling BLOCKR before a BLOCKL,
+             *         correctly skipping nested boxes.
              * @param  toks Token list.
-             * @param  ri   Token index of a BLOCKR.
-             * @return      Token index of the immediately following BLOCKL,
-             *              or -1 if this is the last block in the structure.
+             * @param  li   Token index of the current BLOCKL.
+             * @return      Token index of the previous BLOCKR in the same
+             *              boxed structure, or -1 if this is the first block.
              */
-            int _nextSiblingBlockL(const std::vector<Token> &toks, int ri) const {
-                if (ri + 1 >= (int)toks.size()) return -1;
-                const Token &next = toks[ri + 1];
-                if (next.type == TokType::CTRL &&
-                    exp[next.beg + 1] == Ctrl::BLOCKL[1]) return ri + 1;
+            int _prevSiblingBlockR(const std::vector<Token> &toks, int li) const {
+                int depth = 0;
+                for (int i = li - 1; i >= 0; i--) {
+                    if (toks[i].type == TokType::CTRL) {
+                        if (exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                            if (depth == 0) return i;
+                            depth++;
+                        } else if (exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                            depth--;
+                        }
+                    }
+                }
                 return -1;
             }
 
             /**
-             * @brief  Find the previous sibling BLOCKR before a BLOCKL.
+             * @brief  Find the next sibling BLOCKL after a BLOCKR,
+             *         correctly skipping nested boxes.
              * @param  toks Token list.
-             * @param  li   Token index of a BLOCKL.
-             * @return      Token index of the immediately preceding BLOCKR,
-             *              or -1 if this is the first block.
+             * @param  ri   Token index of the current BLOCKR.
+             * @return      Token index of the next BLOCKL in the same
+             *              boxed structure, or -1 if this is the last block.
              */
-            int _prevSiblingBlockR(const std::vector<Token> &toks, int li) const {
-                if (li - 1 < 0) return -1;
-                const Token &prev = toks[li - 1];
-                if (prev.type == TokType::CTRL &&
-                    exp[prev.beg + 1] == Ctrl::BLOCKR[1]) return li - 1;
+            int _nextSiblingBlockL(const std::vector<Token> &toks, int ri) const {
+                int depth = 0;
+                for (int i = ri + 1; i < (int)toks.size(); i++) {
+                    if (toks[i].type == TokType::CTRL) {
+                        if (exp[toks[i].beg + 1] == Ctrl::BLOCKL[1]) {
+                            if (depth == 0) return i;
+                            depth++;
+                        } else if (exp[toks[i].beg + 1] == Ctrl::BLOCKR[1]) {
+                            depth--;
+                        }
+                    }
+                }
                 return -1;
             }
 
@@ -1075,7 +1090,10 @@ namespace Keypad {
                                          : toks[otherRi].beg;
                                 }
                             } else {
-                                cp = (pi >= 0) ? toks[pi].beg : t.beg;
+                                // BLOCKL of block 2 (base) in log: jump to end of entire log
+                                std::vector<int> blks; int lastRi;
+                                _collectBlocks(toks, _firstBlockL(toks, ti - 1), blks, lastRi);
+                                cp = toks[lastRi].end;
                             }
                         } else {
                             int prevRi = _prevSiblingBlockR(toks, ti - 1);
