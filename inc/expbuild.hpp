@@ -994,7 +994,7 @@ namespace Keypad {
                             std::vector<int> blks; int lastRi;
                             _collectBlocks(toks, ti + 1, blks, lastRi);
                             if (blks.size() >= 2)
-                                cp = toks[blks[1]].end; // enter block 2 (base)
+                                cp = toks[blks[1]].end; // enter block 2
                             else
                                 cp = toks[ti + 1].end;
                         } else {
@@ -1040,7 +1040,7 @@ namespace Keypad {
                         ti - 2 >= 0 && toks[ti - 2].type == TokType::FUNC) {
                         cp = toks[ti - 2].beg;
                     }
-                    // BLOCKR → enter the block (content end or after BLOCKL if empty)
+                    // BLOCKR → enter the block
                     else if (t.type == TokType::CTRL &&
                              exp[t.beg + 1] == Ctrl::BLOCKR[1]) {
                         int li = t.pair;
@@ -1066,7 +1066,6 @@ namespace Keypad {
                         if (nm == CAS::FuncName::log) {
                             int idx = _blockIndex(toks, ti - 1);
                             if (idx == 0) {
-                                // BLOCKL of block 1 (argument) → enter block 2 (base)
                                 std::vector<int> blks; int lastRi;
                                 _collectBlocks(toks, _firstBlockL(toks, ti - 1), blks, lastRi);
                                 if (blks.size() >= 2) {
@@ -1076,15 +1075,7 @@ namespace Keypad {
                                          : toks[otherRi].beg;
                                 }
                             } else {
-                                // BLOCKL of block 2 (base)
-                                int ri = toks[ti - 1].pair; // BLOCKR of this block
-                                if (ri >= 0 && toks[ti - 1].end == toks[ri].beg) {
-                                    // block 2 is empty: jump to the end of block 1
-                                    _jumpToOtherBlockEnd(toks, ti - 1);
-                                } else {
-                                    // block 2 has content: exit before prefix
-                                    cp = (pi >= 0) ? toks[pi].beg : t.beg;
-                                }
+                                cp = (pi >= 0) ? toks[pi].beg : t.beg;
                             }
                         } else {
                             int prevRi = _prevSiblingBlockR(toks, ti - 1);
@@ -1095,16 +1086,16 @@ namespace Keypad {
                                      ? toks[prevLi].end
                                      : toks[prevRi].beg;
                             } else {
-                                // Check if nested inside an outer box
+                                // Nested inside an outer box?
                                 int depth = 0;
                                 int outerL = -1;
                                 for (int j = pi - 1; j >= 0; j--) {
-                                    if (toks[j].type == TokType::CTRL &&
-                                        exp[toks[j].beg + 1] == Ctrl::BLOCKR[1]) depth++;
-                                    else if (toks[j].type == TokType::CTRL &&
-                                             exp[toks[j].beg + 1] == Ctrl::BLOCKL[1]) {
-                                        if (depth == 0) { outerL = j; break; }
-                                        else depth--;
+                                    if (toks[j].type == TokType::CTRL) {
+                                        if (exp[toks[j].beg + 1] == Ctrl::BLOCKR[1]) depth++;
+                                        else if (exp[toks[j].beg + 1] == Ctrl::BLOCKL[1]) {
+                                            if (depth == 0) { outerL = j; break; }
+                                            else depth--;
+                                        }
                                     }
                                 }
                                 if (outerL >= 0) {
