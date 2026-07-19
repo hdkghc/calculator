@@ -1,0 +1,85 @@
+calculator
+S13 16 20 control_S13 0 generic_switch OFF
+VS13 control_S13 0 DC 0
+S34 13 17 control_S34 0 generic_switch OFF
+VS34 control_S34 0 DC 0
+R9 34 5 4.7k
+S17 12 20 control_S17 0 generic_switch OFF
+VS17 control_S17 0 DC 0
+S12 11 21 control_S12 0 generic_switch OFF
+VS12 control_S12 0 DC 0
+S21 14 19 control_S21 0 generic_switch OFF
+VS21 control_S21 0 DC 0
+S29 12 18 control_S29 0 generic_switch OFF
+VS29 control_S29 0 DC 0
+S14 15 20 control_S14 0 generic_switch OFF
+VS14 control_S14 0 DC 0
+S35 12 17 control_S35 0 generic_switch OFF
+VS35 control_S35 0 DC 0
+S30 11 18 control_S30 0 generic_switch OFF
+VS30 control_S30 0 DC 0
+S32 15 17 control_S32 0 generic_switch OFF
+VS32 control_S32 0 DC 0
+R10 35 5 4.7k
+S15 14 20 control_S15 0 generic_switch OFF
+VS15 control_S15 0 DC 0
+S8 15 21 control_S8 0 generic_switch OFF
+VS8 control_S8 0 DC 0
+S4 13 22 control_S4 0 generic_switch OFF
+VS4 control_S4 0 DC 0
+S2 15 22 control_S2 0 generic_switch OFF
+VS2 control_S2 0 DC 0
+S24 11 19 control_S24 0 generic_switch OFF
+VS24 control_S24 0 DC 0
+S25 16 18 control_S25 0 generic_switch OFF
+VS25 control_S25 0 DC 0
+S7 16 21 control_S7 0 generic_switch OFF
+VS7 control_S7 0 DC 0
+S16 13 20 control_S16 0 generic_switch OFF
+VS16 control_S16 0 DC 0
+R8 34 33 330
+S18 11 20 control_S18 0 generic_switch OFF
+VS18 control_S18 0 DC 0
+S6 11 22 control_S6 0 generic_switch OFF
+VS6 control_S6 0 DC 0
+S33 14 17 control_S33 0 generic_switch OFF
+VS33 control_S33 0 DC 0
+S1 16 22 control_S1 0 generic_switch OFF
+VS1 control_S1 0 DC 0
+S31 16 17 control_S31 0 generic_switch OFF
+VS31 control_S31 0 DC 0
+S27 14 18 control_S27 0 generic_switch OFF
+VS27 control_S27 0 DC 0
+S28 13 18 control_S28 0 generic_switch OFF
+VS28 control_S28 0 DC 0
+S23 12 19 control_S23 0 generic_switch OFF
+VS23 control_S23 0 DC 0
+S3 14 22 control_S3 0 generic_switch OFF
+VS3 control_S3 0 DC 0
+S36 11 17 control_S36 0 generic_switch OFF
+VS36 control_S36 0 DC 0
+S19 16 19 control_S19 0 generic_switch OFF
+VS19 control_S19 0 DC 0
+S26 15 18 control_S26 0 generic_switch OFF
+VS26 control_S26 0 DC 0
+S5 12 22 control_S5 0 generic_switch OFF
+VS5 control_S5 0 DC 0
+S10 13 21 control_S10 0 generic_switch OFF
+VS10 control_S10 0 DC 0
+S22 13 19 control_S22 0 generic_switch OFF
+VS22 control_S22 0 DC 0
+S11 12 21 control_S11 0 generic_switch OFF
+VS11 control_S11 0 DC 0
+S9 14 21 control_S9 0 generic_switch OFF
+VS9 control_S9 0 DC 0
+S20 15 19 control_S20 0 generic_switch OFF
+VS20 control_S20 0 DC 0
+R7 35 32 330
+
+.MODEL generic_switch SW(Ron=1m Roff=1Meg Vt=2.5)
+
+.options savecurrents
+.OP
+*.TRAN 1ms 100ms
+* .AC DEC 100 100 1MEG
+.END
