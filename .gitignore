@@ -6,4 +6,4 @@ test_fonts/build
 test/bin
 doc/*
 preview.ppm
-hardware/kicad/*
+# hardware/kicad/*
