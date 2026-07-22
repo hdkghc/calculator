@@ -587,7 +587,7 @@ sequenceDiagram
     participant A as 设备 A（先插入）
     participant B as 设备 B（后插入）
 
-    Note over A,B: 线缆插入
+    Note over A: 线缆插入
     A->>A: TN 变低 → 检测到插入
     A->>A: SCL 高电平 → 声明为主机
     A->>B: 将 SCL 拉低
@@ -600,7 +600,7 @@ sequenceDiagram
     Note over A,B: 进入握手
 ```
 
-### 10.2 握手（4步脉冲交换）
+### 10.2 握手（3步脉冲交换）
 
 ```mermaid
 sequenceDiagram

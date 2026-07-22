@@ -575,7 +575,7 @@ sequenceDiagram
     participant A as Device A (first)
     participant B as Device B (second)
 
-    Note over A,B: Cable inserted
+    Note over A: Cable inserted
     A->>A: TN low → detect insertion
     A->>A: SCL high → claim master
     A->>B: Pull SCL low
@@ -588,7 +588,7 @@ sequenceDiagram
     Note over A,B: Enter handshake
 ```
 
-### 10.2 Handshake (4‑step pulse exchange)
+### 10.2 Handshake (3‑step pulse exchange)
 
 ```mermaid
 sequenceDiagram
