@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "MSP1803_TFT_12pin_Library")(type "KiCad")(uri "${KIPRJMOD}/MSP1803_TFT_12pin_Library.kicad_sym")(options "")(descr ""))
+)
