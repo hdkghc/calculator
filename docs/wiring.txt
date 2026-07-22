@@ -1,0 +1,10 @@
+GPIO        ST7735          PICO SPI0 (default)
+-----       --------        --------------------
+20          RST
+21          A0
+22          LED
+19          SDA             TX
+18          SCL             SCK
+17          CS              CSn
+
+具体接线参见 fritzing/calculator.fzz || fritzing/calculator_bb.png
