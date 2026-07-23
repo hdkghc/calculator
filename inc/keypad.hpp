@@ -162,10 +162,10 @@ namespace Keypad {
             // A6: ON / ABOUT / CLR / ON
             {
                 Ctrl::ON,           // 0
-                Ctrl::ABOUT,        // 1: SHIFT
-                "",                 // 2: ALPHA
-                "",                 // 3: SHIFT|ALPHA
-                Ctrl::CLR,          // 4: CTRL
+                Ctrl::ON,           // 1: SHIFT
+                Ctrl::ON,           // 2: ALPHA
+                Ctrl::ON,           // 3: SHIFT|ALPHA
+                Ctrl::ON,           // 4: CTRL
                 Ctrl::ON,           // 5: SHIFT|CTRL
             }
         },
@@ -278,11 +278,11 @@ namespace Keypad {
             // C6: AC / OFF / LOCK
             {
                 Ctrl::AC,               // 0
-                Ctrl::OFF,              // 1: SHIFT
+                Ctrl::AC,               // 1: SHIFT
                 "l",                    // 2: ALPHA
                 "L",                    // 3: SHIFT|ALPHA
                 Ctrl::LOCK,             // 4: CTRL
-                "",                     // 5: SHIFT|CTRL
+                Ctrl::CLR,              // 5: SHIFT|CTRL
             }
         },
 
@@ -411,7 +411,7 @@ namespace Keypad {
                 "y",                    // 2: ALPHA
                 "Y",                    // 3: SHIFT|ALPHA
                 Ctrl::ZOOM_P,           // 4: CTRL
-                "",                     // 5: SHIFT|CTRL
+                Ctrl::ABOUT,            // 5: SHIFT|CTRL
             },
             // F2: DOT / i / ZOOM-
             {

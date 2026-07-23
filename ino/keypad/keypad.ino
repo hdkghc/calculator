@@ -25,6 +25,9 @@
 #define ACK       0x06
 #define NAK       0x15
 
+// Power control pin (A3 controls Q2 base, LOW to enable Pico power)
+#define PWR_CTRL_PIN A3
+
 const byte ROWS = 6;
 const byte COLS = 6;
 
@@ -43,14 +46,61 @@ byte colPins[COLS] = {8, 9, 10, 11, 12, A0};  // C6 moved to A0
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
+const char ON_KEY_ENCODED = 0x06;
+
+// Power state: false = powered off (default), true = powered on
+bool picoPowered = false;
+
 void setup() {
     keypad.setDebounceTime(25);
     Wire.begin();  // Master mode
+
+    // Initialize power control pin: default HIGH to keep Pico off
+    pinMode(PWR_CTRL_PIN, OUTPUT);
+    digitalWrite(PWR_CTRL_PIN, HIGH);   // Pico off at start
 }
 
 void loop() {
     char c = keypad.getKey();
-    if (!c) { delay(10); return; }
+    if (!c) {
+        delay(10);
+        return;
+    }
+
+    // ON key toggles Pico power state
+    if (c == ON_KEY_ENCODED) {
+        // Toggle power state
+        picoPowered = !picoPowered;
+        if(!picoPowered) {
+            uint8_t data = (uint8_t)c - 1;  // Restore original encoding
+
+            // Send to Pico, retry until ACK
+            while (true) {
+                Wire.beginTransmission(PICO_ADDR);
+                Wire.write(&data, 1);
+                if (Wire.endTransmission() != 0) {
+                    delay(5);
+                    continue;
+                }
+
+                delay(1);
+                int len = Wire.requestFrom(PICO_ADDR, (uint8_t)1);
+                if (len == 1 && Wire.read() == ACK) break;
+                delay(5);
+            }
+            delay(3000); // Animation
+        }
+        digitalWrite(PWR_CTRL_PIN, picoPowered ? LOW : HIGH);
+        // Do not send this key to Pico
+        return;
+    }
+
+    // Ignore other keys if Pico is not powered
+    if (!picoPowered) {
+        // Optionally, you could add a small delay here to avoid busy-loop
+        delay(10);
+        return;
+    }
 
     uint8_t data = (uint8_t)c - 1;  // Restore original encoding
 
@@ -58,7 +108,10 @@ void loop() {
     while (true) {
         Wire.beginTransmission(PICO_ADDR);
         Wire.write(&data, 1);
-        if (Wire.endTransmission() != 0) { delay(5); continue; }
+        if (Wire.endTransmission() != 0) {
+            delay(5);
+            continue;
+        }
 
         delay(1);
         int len = Wire.requestFrom(PICO_ADDR, (uint8_t)1);

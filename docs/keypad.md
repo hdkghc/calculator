@@ -11,15 +11,17 @@
 | **E** | 1      | 2     | 3    | sin  |  +   |  -   |
 | **F** | 0      |  ·    |  EE  | FMT  |  Ans | EXE  |
 
+`ON` : ON / OFF
+
 ---
 
 ## SHIFT Layer
 
 |       | 1      | 2     | 3    | 4    | 5    | 6    |
 |-------|--------|-------|------|------|------|------|
-| **A** |        | ALPHA | CTRL | SOLV | MODE | ABOUT|
+| **A** |        | ALPHA | CTRL | SOLV | MODE |  ON  |
 | **B** | cbrt   |  root |  ³   | dot  |  ,   |  ln  |
-| **C** | vector | mtrx  | CALC | atan |  INS | OFF  |
+| **C** | vector | mtrx  | CALC | atan |  INS |  AC  |
 | **D** | CONST  | CONV  | MENU | acos |  P   |  C   |
 | **E** |  deg   |  rad  |      | asin |  Pol | Rec  |
 | **F** |  abs   |   i   |  π   |   e  | PAns |   =  |
@@ -30,7 +32,7 @@
 
 |       | 1      | 2     | 3    | 4    | 5    | 6    |
 |-------|--------|-------|------|------|------|------|
-| **A** | SHIFT  | ALPHA |      | STO  | SET  | CLR  |
+| **A** | SHIFT  | ALPHA |      | STO  | SET  |  ON  |
 | **B** | frac   |       | ^-1  |      |  ;   | logab|
 | **C** |        |  ↑ Y+ |      | tanh | UNDO | LOCK |
 | **D** |  ← X-  |  OK   | → X+ | cosh |  !   | mod  |
@@ -47,10 +49,10 @@
 |-------|--------|-------|------|-------|------|--------|
 | **A** |        | ALPHA |      |  RCL  |      |   ON   |
 | **B** |        |       |      |       |      |        |
-| **C** |        |       |      | atanh | REDO |        |
+| **C** |        |       |      | atanh | REDO |  CLR   |
 | **D** |        |       |      | acosh |      |        |
 | **E** |        |       |      | asinh |      | FACTOR |
-| **F** |        |       |      |       |      | EXPAND |
+| **F** | ABOUT  |       |      |       |      | EXPAND |
 
 ---
 
@@ -58,7 +60,7 @@
 
 |       | 1      | 2     | 3    | 4     | 5    | 6    |
 |-------|--------|-------|------|-------|------|------|
-| **A** | SHIFT  |       |      |       |      |      |
+| **A** | SHIFT  |       |      |       |      |  ON  |
 | **B** |   a    |   b   |  c   |   d   |  e   |   f  |
 | **C** |   g    |   h   |  i   |   j   |  k   |   l  |
 | **D** |   m    |   n   |  o   |   p   |  q   |   r  |
@@ -71,7 +73,7 @@
 
 |       | 1      | 2     | 3    | 4     | 5    | 6    |
 |-------|--------|-------|------|-------|------|------|
-| **A** |        |       |      |       |      |      |
+| **A** |        |       |      |       |      |  ON  |
 | **B** |   A    |   B   |  C   |   D   |  E   |   F  |
 | **C** |   G    |   H   |  I   |   J   |  K   |   L  |
 | **D** |   M    |   N   |  O   |   P   |  Q   |   R  |
