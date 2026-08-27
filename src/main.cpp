@@ -18,14 +18,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-extern "C" {
-    #include <pico/stdlib.h>
-    #include <pico/time.h>
-}
+#include <cstdio>
+#include <cstring>
+#include <sstream>
+
+#include "fsl_common.h"
+#include "fsl_clock.h"
 
 #ifndef PROGMEM
 #define PROGMEM __attribute__((aligned(4), section(".rodata")))
 #endif
+
 #include "dispinterface/stddisplay.hpp"
 #include "keypadio.hpp"
 #include "../fonts/CW.h"
@@ -36,11 +39,16 @@ extern "C" {
 #include "cas/parser.hpp"
 #include "cas/expand.hpp"
 
-#include <sstream>
-
 using namespace std;
 using namespace Keypad;
 using namespace CAS;
+
+// ========== Simple delay ==========
+static inline void sleep_ms(uint32_t ms) {
+    for (volatile uint32_t i = 0; i < ms * 1000; i++) {
+        __NOP();
+    }
+}
 
 // ========== Printer ==========
 
@@ -150,17 +158,13 @@ void printExpr(stringstream &ss, Exptree* node) {
 }
 
 int main() {
-    // LED
-    gpio_init(PICO_DEFAULT_LED_PIN);
-    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
-
     // Init display
     Display::RedTFTdisp display;
     display.InitPin();
     display.InitDisplay();
     display.ClearScreen(0x0000);
 
-    // Init keypad I2C
+    // Init keypad
     Keypad::KeypadIO keypad;
     keypad.init();
 
@@ -172,54 +176,45 @@ int main() {
     while (true) {
         uint8_t row, col;
         if (keypad.read(row, col)) {
-            gpio_put(PICO_DEFAULT_LED_PIN, 1);
-
             display.ClearScreen(0x0000);
 
-            // snprintf(buf, sizeof(buf), "R:%d C:%d", row, col);
-            // display.DrawText(0, 12, &ClassWiz_CW_Display_Regular12pt, 1,
-            //                 buf, 0xFFFF);
-
             uint8_t r = expb.press(row, col);
-            gpio_put(PICO_DEFAULT_LED_PIN, 0);
             sleep_ms(20);
-            gpio_put(PICO_DEFAULT_LED_PIN, 1);
+
             display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
-                            ((expb.flg & 7) == 0) ? ((uint16_t)Color::ORANGE) : RGB111_to_RGB565(expb.flg & M_ALPHA, expb.flg & M_SHIFT, expb.flg & M_CTRL), expb.exp.c_str());
-            display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12, (expb.flg & M_INSERT) ? (uint16_t)Color::PURPLE : (uint16_t)Color::ORANGE);
-            gpio_put(PICO_DEFAULT_LED_PIN, 0);
-            if(r == B_EXEC) {
+                            ((expb.flg & 7) == 0) ? ((uint16_t)Color::ORANGE) : RGB111_to_RGB565(expb.flg & M_ALPHA, expb.flg & M_SHIFT, expb.flg & M_CTRL),
+                            expb.exp.c_str());
+            display.DrawLine(expb.cp * 9, 0, expb.cp * 9, 12,
+                            (expb.flg & M_INSERT) ? (uint16_t)Color::PURPLE : (uint16_t)Color::ORANGE);
+
+            if (r == B_EXEC) {
                 stringstream ss;
                 ss.clear();
                 expt = Parser::parse(expb.exp);
-                if(expt == nullptr) {
+                if (expt == nullptr) {
                     ss << Parser::getError();
                 }
                 st = TreeSimplifier::simplify(expt);
                 display.ClearScreen(0x0000);
                 printExpr(ss, st);
-                // printExpr(ss, expt);
-                // SimpUtil::freeTree(expt);
                 display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
                             ((uint16_t)Color::ORANGE), ss.str().c_str());
                 SimpUtil::freeTree(st);
             }
-            if(r == B_EXPAND) {
+            if (r == B_EXPAND) {
                 stringstream ss;
                 ss.clear();
                 expt = Parser::parse(expb.exp);
-                if(expt == nullptr) {
+                if (expt == nullptr) {
                     ss << Parser::getError();
                 }
                 Exptree *ep = TreeExpander::expand(expt);
                 st = TreeSimplifier::simplify(ep);
                 display.ClearScreen(0x0000);
                 printExpr(ss, st);
-                // printExpr(ss, expt);
-                // SimpUtil::freeTree(expt);
                 display.DrawTextF(0, 12, &ClassWiz_CW_Display_Regular12pt, 1, "%l%s",
                             ((uint16_t)Color::ORANGE), ss.str().c_str());
-                // SimpUtil::freeTree(st);
+                SimpUtil::freeTree(st);
                 SimpUtil::freeTree(ep);
             }
         }

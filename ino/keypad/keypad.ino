@@ -18,6 +18,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/*
+
+Deprecated: This code is now merged into KeypadIO class in inc/keypadio.hpp. 
+            The keypad scanning are handled there. 
+            This file is kept for reference and historical purposes.
+
 #include <Wire.h>
 #include <Keypad.h>
 
@@ -119,3 +125,5 @@ void loop() {
         delay(5);
     }
 }
+
+*/

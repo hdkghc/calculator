@@ -5,31 +5,31 @@
  *
  *  SPDX-License-Identifier: GPL-3.0-or-later
  *  SPDX-FileCopyrightText: 2026 hdkghc <peitongxin@outlook.com>
- *
+ * 
  *  This program is free software: you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation, either version 3 of the License, or
- *  (at your option) any later version.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef COMMU_I2C_LINK_HPP
 #define COMMU_I2C_LINK_HPP
 
 #include <cstdint>
-extern "C" {
-    #include <pico/stdlib.h>
-    #include <hardware/i2c.h>
-    #include <hardware/gpio.h>
-}
+#include "fsl_i2c.h"
+#include "fsl_clock.h"
+#include "fsl_common.h"
+#include "fsl_iomuxc.h"
 
+#include "gpio_rt1011.hpp"
 
 namespace commu {
 
@@ -45,127 +45,191 @@ namespace commu {
     class I2CLink {
         public:
             /**
-             * @brief Constructor
-             * @param i2c  I2C hardware instance (i2c0 or i2c1)
-             * @param addr Slave address to use (when in slave mode)
+             * @brief Construct a new I2CLink object
+             * @param i2c   I2C peripheral (LPI2C1)
+             * @param addr  I2C slave address
              */
-            I2CLink(i2c_inst_t *i2c = i2c0, uint8_t addr = 0x42)
-                : i2c_(i2c), addr_(addr), sda_(4), scl_(5), rn_(6), tn_(7) {}
+            I2CLink(I2C_Type *i2c = LPI2C1, uint8_t addr = 0x42)
+                : i2c_(i2c), addr_(addr), sda_(17), scl_(20), rn_(22), tn_(21) {}
 
             /**
-             * @brief Initialize GPIO pins
-             * @param sda SDA pin (default 4)
-             * @param scl SCL pin (default 5)
-             * @param rn  Ring Normal pin (default 6)
-             * @param tn  Tip Normal pin (default 7)
+             * @brief Initialize GPIO pins for I2C and detection
+             * @param sda  SDA pin number (default: 17 = AD_03)
+             * @param scl  SCL pin number (default: 20 = AD_06)
+             * @param rn   RN pin number (default: 22 = AD_08)
+             * @param tn   TN pin number (default: 21 = AD_07)
              */
-            void init_pins(uint sda = 4, uint scl = 5, uint rn = 6, uint tn = 7) {
+            void init_pins(uint32_t sda = 17, uint32_t scl = 20, uint32_t rn = 22, uint32_t tn = 21) {
                 sda_ = sda; scl_ = scl; rn_ = rn; tn_ = tn;
 
-                // Detection pins: pull-down, inserted = low
-                gpio_init(rn_);
-                gpio_set_dir(rn_, GPIO_IN);
-                gpio_pull_down(rn_);
+                // Detection pins: input with pull-down
+                rn_pin_ = gpio::Pin(GPIO1, rn_, gpio::Mode::INPUT_PULLDOWN);
+                tn_pin_ = gpio::Pin(GPIO1, tn_, gpio::Mode::INPUT_PULLDOWN);
 
-                gpio_init(tn_);
-                gpio_set_dir(tn_, GPIO_IN);
-                gpio_pull_down(tn_);
-
-                // I2C pins: initially inputs with pull-up
-                gpio_init(sda_);
-                gpio_set_dir(sda_, GPIO_IN);
-                gpio_pull_up(sda_);
-
-                gpio_init(scl_);
-                gpio_set_dir(scl_, GPIO_IN);
-                gpio_pull_up(scl_);
+                // I2C pins: input with pull-up (configured later in enable_master/enable_slave)
+                sda_pin_ = gpio::Pin(GPIO1, sda_, gpio::Mode::INPUT_PULLUP);
+                scl_pin_ = gpio::Pin(GPIO1, scl_, gpio::Mode::INPUT_PULLUP);
             }
 
             /**
-             * @brief Check if cable is inserted
-             * @return true if cable inserted (TN low), false if removed (TN high)
+             * @brief Check if cable is inserted (TN pin pulled low)
+             * @return true  Cable inserted
+             * @return false No cable
              */
             bool is_cable_inserted() const {
-                return gpio_get(tn_) == 0;
-            }
-
-            /** @brief Set a GPIO pin high (output) */
-            void set_pin_high(uint pin) {
-                gpio_set_dir(pin, GPIO_OUT);
-                gpio_put(pin, 1);
-            }
-
-            /** @brief Set a GPIO pin low (output) */
-            void set_pin_low(uint pin) {
-                gpio_set_dir(pin, GPIO_OUT);
-                gpio_put(pin, 0);
-            }
-
-            /** @brief Read a GPIO pin (input) */
-            bool read_pin(uint pin) const {
-                return gpio_get(pin);
-            }
-
-            /** @brief Get SDA pin number */
-            uint sda_pin() const { return sda_; }
-
-            /** @brief Get SCL pin number */
-            uint scl_pin() const { return scl_; }
-
-            /** @brief Get TN pin number (cable detection) */
-            uint tn_pin() const { return tn_; }
-
-            /** @brief Enable I2C master mode (100 kHz) */
-            void enable_master() {
-                i2c_init(i2c_, 100 * 1000);
-                gpio_set_function(sda_, GPIO_FUNC_I2C);
-                gpio_set_function(scl_, GPIO_FUNC_I2C);
-                gpio_pull_up(sda_);
-                gpio_pull_up(scl_);
+                return tn_pin_.read() == 0;
             }
 
             /**
-             * @brief Enable I2C slave mode with callback
-             * @param handler I2C slave event handler
+             * @brief Set a GPIO pin to high level
+             * @param pin  GPIO pin number
              */
-            void enable_slave(i2c_slave_handler_t handler) {
-                gpio_set_function(sda_, GPIO_FUNC_I2C);
-                gpio_set_function(scl_, GPIO_FUNC_I2C);
-                gpio_disable_pulls(sda_);
-                gpio_disable_pulls(scl_);
-                i2c_set_slave_mode(i2c_, true, addr_);
-                i2c_slave_init(i2c_, addr_, handler);
+            void set_pin_high(uint32_t pin) {
+                gpio::Pin p(GPIO1, pin, gpio::Mode::OUTPUT);
+                p.write(HIGH);
             }
 
             /**
-             * @brief Master write to slave
-             * @param data Data buffer
-             * @param len  Length in bytes
-             * @return     true if all bytes written
+             * @brief Set a GPIO pin to low level
+             * @param pin  GPIO pin number
+             */
+            void set_pin_low(uint32_t pin) {
+                gpio::Pin p(GPIO1, pin, gpio::Mode::OUTPUT);
+                p.write(LOW);
+            }
+
+            /**
+             * @brief Read a GPIO pin level
+             * @param pin  GPIO pin number
+             * @return true  High level
+             * @return false Low level
+             */
+            bool read_pin(uint32_t pin) const {
+                gpio::Pin p(GPIO1, pin, gpio::Mode::INPUT);
+                return p.read();
+            }
+
+            /**
+             * @brief Get SDA pin number
+             * @return uint32_t SDA pin number
+             */
+            uint32_t sda_pin() const { return sda_; }
+
+            /**
+             * @brief Get SCL pin number
+             * @return uint32_t SCL pin number
+             */
+            uint32_t scl_pin() const { return scl_; }
+
+            /**
+             * @brief Get TN pin number
+             * @return uint32_t TN pin number
+             */
+            uint32_t tn_pin() const { return tn_; }
+
+            /**
+             * @brief Enable I2C master mode
+             */
+            void enable_master() {
+                CLOCK_EnableClock(kCLOCK_Lpi2c1);
+                configure_i2c_pins();
+
+                lpi2c_master_config_t masterConfig;
+                LPI2C_MasterGetDefaultConfig(&masterConfig);
+                masterConfig.baudRate_Hz = 100 * 1000;
+                LPI2C_MasterInit(i2c_, &masterConfig, CLOCK_GetFreq(kCLOCK_Lpi2c1));
+            }
+
+            /**
+             * @brief Enable I2C slave mode
+             * @param handler  Slave transfer callback handler
+             */
+            void enable_slave(lpi2c_slave_transfer_callback_t handler) {
+                (void)handler;
+                CLOCK_EnableClock(kCLOCK_Lpi2c1);
+                configure_i2c_pins();
+
+                lpi2c_slave_config_t slaveConfig;
+                LPI2C_SlaveGetDefaultConfig(&slaveConfig);
+                slaveConfig.address0 = addr_;
+                slaveConfig.enableGeneralCall = false;
+                LPI2C_SlaveInit(i2c_, &slaveConfig);
+            }
+
+            /**
+             * @brief Master write to I2C bus
+             * @param data  Data buffer
+             * @param len   Data length
+             * @return true  Write success
+             * @return false Write failed
              */
             bool master_write(const uint8_t *data, size_t len) {
-                return i2c_write_blocking(i2c_, addr_, data, len, false) == (int)len;
+                status_t status = LPI2C_MasterWriteBlocking(i2c_, data, len, addr_,
+                                                            kLPI2C_TransferDefaultFlag);
+                return status == kStatus_Success;
             }
 
             /**
-             * @brief Master read from slave
-             * @param buf  Output buffer
-             * @param len  Number of bytes to read
-             * @param timeout_ms Timeout in milliseconds (ignored for simplicity)
-             * @return     true if all bytes read
+             * @brief Master read from I2C bus
+             * @param buf         Buffer to store read data
+             * @param len         Number of bytes to read
+             * @param timeout_ms  Timeout in milliseconds
+             * @return true       Read success
+             * @return false      Read failed
              */
             bool master_read(uint8_t *buf, size_t len, uint32_t timeout_ms) {
-                (void)timeout_ms;  // Not used in blocking read
-                return i2c_read_blocking(i2c_, addr_, buf, len, false) == (int)len;
+                (void)timeout_ms;
+                status_t status = LPI2C_MasterReadBlocking(i2c_, buf, len, addr_,
+                                                           kLPI2C_TransferDefaultFlag);
+                return status == kStatus_Success;
             }
 
-            /** @brief Get I2C instance */
-            i2c_inst_t *i2c() const { return i2c_; }
+            /**
+             * @brief Get I2C peripheral pointer
+             * @return I2C_Type*  I2C peripheral
+             */
+            I2C_Type *i2c() const { return i2c_; }
 
         private:
-            i2c_inst_t *i2c_;
+            /**
+             * @brief Configure I2C pins with IOMUXC
+             */
+            void configure_i2c_pins() {
+                #ifdef IOMUXC_GPIO_AD_13_LPI2C1_SDA
+                    IOMUXC_SetPinMux(IOMUXC_GPIO_AD_13_LPI2C1_SDA, 0U);
+                    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_13_LPI2C1_SDA,
+                                        IOMUXC_SW_PAD_CTL_PAD_PUE_MASK |
+                                        IOMUXC_SW_PAD_CTL_PAD_PUS(3U) |
+                                        IOMUXC_SW_PAD_CTL_PAD_SPEED(2U) |
+                                        IOMUXC_SW_PAD_CTL_PAD_DSE(6U));
+                #else
+                    #warning "IOMUXC_GPIO_AD_13_LPI2C1_SDA not defined"
+                #endif
+
+                #ifdef IOMUXC_GPIO_AD_14_LPI2C1_SCL
+                    IOMUXC_SetPinMux(IOMUXC_GPIO_AD_14_LPI2C1_SCL, 0U);
+                    IOMUXC_SetPinConfig(IOMUXC_GPIO_AD_14_LPI2C1_SCL,
+                                        IOMUXC_SW_PAD_CTL_PAD_PUE_MASK |
+                                        IOMUXC_SW_PAD_CTL_PAD_PUS(3U) |
+                                        IOMUXC_SW_PAD_CTL_PAD_SPEED(2U) |
+                                        IOMUXC_SW_PAD_CTL_PAD_DSE(6U));
+                #else
+                    #warning "IOMUXC_GPIO_AD_14_LPI2C1_SCL not defined"
+                #endif
+
+                // Re-init GPIO pins with correct mode
+                sda_pin_ = gpio::Pin(GPIO1, sda_, gpio::Mode::INPUT_PULLUP);
+                scl_pin_ = gpio::Pin(GPIO1, scl_, gpio::Mode::INPUT_PULLUP);
+            }
+
+            I2C_Type *i2c_;
             uint8_t addr_;
-            uint sda_, scl_, rn_, tn_;
+            uint32_t sda_, scl_, rn_, tn_;
+
+            gpio::Pin sda_pin_;
+            gpio::Pin scl_pin_;
+            gpio::Pin rn_pin_;
+            gpio::Pin tn_pin_;
     };
 
 } // namespace commu

@@ -1,5 +1,5 @@
-/** @file /inc/keypadio.hpp
- *  @brief I2C slave interface for receiving keypad data from Nano
+/** @file inc/keypadio.hpp
+ *  @brief Matrix keypad scanner for RT1010
  *  @author hdkghc
  *  @version 0.1
  *  Copyright (C) 2026 hdkghc (peitongxin@outlook.com)
@@ -21,92 +21,88 @@
 #ifndef KEYPADIO_HPP
 #define KEYPADIO_HPP
 
-extern "C" {
-    #include <pico/stdlib.h>
-    #include <hardware/i2c.h>
-}
-
 #include <cstdint>
+#include <cstring>
+
+#include "gpio_rt1011.hpp"
 
 namespace Keypad {
 
     /**
-     * @brief I2C slave driver for receiving keypad events from Nano
+     * @brief Matrix keypad scanner
      * 
-     * Nano acts as I2C master: on keypress it writes 1 byte then
-     * reads back 1 byte (ACK/NAK). Pico polls the I2C peripheral
-     * registers in slave mode.
+     * Pin assignments (RT1010 80-pin LQFP):
+     * - Rows R1~R6: GPIO_11~GPIO_06 (GPIO2, Pins 11~6)
+     * - Cols C1~C6: GPIO_05~GPIO_00 (GPIO2, Pins 5~0)
      */
     class KeypadIO {
-            static constexpr uint8_t PICO_ADDR = 0x08; ///< I2C slave address
-            static constexpr uint8_t ACK       = 0x06; ///< Acknowledge
-            static constexpr uint8_t NAK       = 0x15; ///< Negative acknowledge
-
-            i2c_inst_t *i2c;    ///< I2C hardware instance
-            uint8_t     sda;    ///< SDA pin
-            uint8_t     scl;    ///< SCL pin
-            uint8_t     rx_buf; ///< Received byte buffer
-            bool        has_data; ///< Valid data pending
-            uint8_t     response; ///< Response to send back to Nano
-
         public:
-            /**
-             * @brief Constructor
-             * @param i2c  I2C instance (default i2c1)
-             * @param sda  SDA pin (default 26)
-             * @param scl  SCL pin (default 27)
-             */
-            KeypadIO(i2c_inst_t *i2c = i2c1, uint sda = 26, uint scl = 27)
-                : i2c(i2c), sda(sda), scl(scl),
-                rx_buf(0), has_data(false), response(NAK) {}
+            static constexpr uint8_t ROWS = 6;
+            static constexpr uint8_t COLS = 6;
+            static constexpr uint8_t DEBOUNCE_THRESHOLD = 3;
 
-            /**
-             * @brief Initialize I2C in slave mode
-             * @param freq  Bus frequency in Hz (default 100kHz)
-             */
-            void init(uint freq = 100 * 1000) {
-                i2c_init(i2c, freq);
-                gpio_set_function(sda, GPIO_FUNC_I2C);
-                gpio_set_function(scl, GPIO_FUNC_I2C);
-                i2c_set_slave_mode(i2c, true, PICO_ADDR);
+            KeypadIO(void * = nullptr, uint8_t = 0, uint8_t = 0) {
+                memset(key_state_, 0, sizeof(key_state_));
+                memset(debounce_counter_, 0, sizeof(debounce_counter_));
             }
 
-            /**
-             * @brief Poll for incoming keypad data
-             * 
-             * Checks I2C raw interrupt status registers. Nano writes 1 byte
-             * then reads 1 byte response. This method handles both phases.
-             * 
-             * @param row  Output: row index (0-5)
-             * @param col  Output: column index (0-5)
-             * @return     true if a valid key was received
-             */
+            void init(uint32_t = 100 * 1000) {
+                // R1=GPIO_11, R2=GPIO_10, ... R6=GPIO_06
+                for (uint8_t i = 0; i < ROWS; i++) {
+                    rows_pin_[i] = 11 - i;
+                    rows_[i] = gpio::Pin(GPIO1, rows_pin_[i], gpio::Mode::OUTPUT);
+                    rows_[i].write(HIGH);
+                }
+                // C1=GPIO_05, C2=GPIO_04, ... C6=GPIO_00
+                for (uint8_t i = 0; i < COLS; i++) {
+                    cols_pin_[i] = 5 - i;
+                    cols_[i] = gpio::Pin(GPIO1, cols_pin_[i], gpio::Mode::INPUT_PULLUP);
+                }
+            }
+
             bool read(uint8_t &row, uint8_t &col) {
-                auto *hw = i2c_get_hw(i2c);
+                for (uint8_t r = 0; r < ROWS; r++) {
+                    rows_[r].write(LOW);
+                    for (volatile int i = 0; i < 10; i++) __NOP();
 
-                // Nano wrote data to us
-                if (hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_RX_FULL_BITS) {
-                    rx_buf   = (uint8_t)hw->data_cmd;
-                    has_data = true;
-                    response = ACK;
-                    hw->clr_rx_done;
+                    for (uint8_t c = 0; c < COLS; c++) {
+                        bool pressed = !cols_[c].read();
+
+                        if (pressed) {
+                            if (debounce_counter_[r][c] < DEBOUNCE_THRESHOLD) {
+                                debounce_counter_[r][c]++;
+                            }
+                            if (debounce_counter_[r][c] >= DEBOUNCE_THRESHOLD &&
+                                !key_state_[r][c]) {
+                                key_state_[r][c] = true;
+                                row = r;
+                                col = c;
+                                rows_[r].write(HIGH);
+                                return true;
+                            }
+                        } else {
+                            if (key_state_[r][c]) {
+                                key_state_[r][c] = false;
+                            }
+                            debounce_counter_[r][c] = 0;
+                        }
+                    }
+
+                    rows_[r].write(HIGH);
                 }
 
-                // Nano requests our response
-                if (hw->raw_intr_stat & I2C_IC_RAW_INTR_STAT_RD_REQ_BITS) {
-                    hw->data_cmd = response;
-                    hw->clr_rd_req;
-                    response = NAK;  // Reset for next transaction
-                }
-
-                if (has_data) {
-                    has_data = false;
-                    row = (rx_buf >> 4) & 0x0F;
-                    col = rx_buf & 0x0F;
-                    return true;
-                }
+                row = 0xFF;
+                col = 0xFF;
                 return false;
             }
+
+        private:
+            uint8_t rows_pin_[ROWS];
+            uint8_t cols_pin_[COLS];
+            gpio::Pin rows_[ROWS];
+            gpio::Pin cols_[COLS];
+            bool key_state_[ROWS][COLS];
+            uint8_t debounce_counter_[ROWS][COLS];
     };
 
 } // namespace Keypad
