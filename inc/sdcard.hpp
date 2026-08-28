@@ -5,7 +5,7 @@
  *
  *  @details This driver uses direct register manipulation for maximum performance.
  *           The SPI bit-banging loop is hand-optimized. All GPIO operations
- *           bypass HAL for speed.
+ *           bypass HAL for speed. Supports SDHC/SDXC cards (>2GB).
  *
  *  Pin assignments (GPIO2):
  *  - MISO: GPIO_SD_12 (GPIO2, Pin 12) - Input
@@ -23,6 +23,9 @@
  *      if (fatfs.read_file("README.TXT", content)) {
  *          printf("File: %s\n", content.c_str());
  *      }
+ *      fatfs.rename_file("OLD.TXT", "NEW.TXT");
+ *      fatfs.mkdir("DATA");
+ *      fatfs.format("MYCARD");
  *  }
  *  @endcode
  *
@@ -49,6 +52,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
+#include <cctype>
 
 #include "fsl_common.h"
 #include "fsl_clock.h"
@@ -57,16 +61,22 @@
 
 namespace SDCard {
 
+    // ================================================================
+    // Constants
+    // ================================================================
+
     /**
      * @brief SD card SPI command codes
      */
     enum SDCommand : uint8_t {
         CMD0    = 0x00,     /**< GO_IDLE_STATE - Reset card to idle */
         CMD8    = 0x08,     /**< SEND_IF_COND - Check voltage range */
+        CMD9    = 0x09,     /**< SEND_CSD - Read CSD register */
         CMD17   = 0x11,     /**< READ_SINGLE_BLOCK - Read one block */
         CMD24   = 0x18,     /**< WRITE_BLOCK - Write one block */
         CMD55   = 0x37,     /**< APP_CMD - Prefix for ACMD */
         ACMD41  = 0x29,     /**< SD_SEND_OP_COND - Initialize card */
+        CMD58   = 0x3A,     /**< READ_OCR - Read OCR register */
         CMD59   = 0x3B,     /**< CRC_ON_OFF - Enable/disable CRC */
     };
 
@@ -84,14 +94,23 @@ namespace SDCard {
         DATA_RESPONSE   = 0x05,     /**< Data accepted (bits 0-4 = 00101) */
     };
 
+    /** @brief Maximum retries for command/block operations */
+    static constexpr int MAX_RETRIES = 3;
+
+    /** @brief Maximum clusters to traverse (safety limit) */
+    static constexpr uint32_t MAX_CLUSTER_TRAVERSE = 0x1000000;
+
+    /** @brief SD card block size in bytes */
+    static constexpr int BLOCK_SIZE = 512;
+
     // ================================================================
-    // GPIO2 Register Definitions (cached for speed)
+    // GPIO2 Register Definitions
     // ================================================================
     // GPIO2 Base Address: 0x4200_0000 (per RM Table 12-1)
     // Register offsets:
-    //   0x00: DR (Data Register) - Read/write current pin states
-    //   0x04: GDIR (Direction Register) - Configure input/output
-    //   0x08: PSR (Pad Status Register) - Read actual pin states
+    //   0x00: DR (Data Register)
+    //   0x04: GDIR (Direction Register)
+    //   0x08: PSR (Pad Status Register)
     //   0x84: DR_SET - Write 1 to set bits (atomic)
     //   0x88: DR_CLEAR - Write 1 to clear bits (atomic)
     //   0x8C: DR_TOGGLE - Write 1 to toggle bits (atomic)
@@ -106,11 +125,6 @@ namespace SDCard {
 
     // ================================================================
     // IOMUXC Pin Mux Macros (GPIO2 mode)
-    // ================================================================
-    // GPIO_SD_00 -> GPIO2_IO00 (MOSI)
-    // GPIO_SD_05 -> GPIO2_IO05 (CS)
-    // GPIO_SD_12 -> GPIO2_IO12 (MISO)
-    // GPIO_SD_13 -> GPIO2_IO13 (SCK)
     // ================================================================
     #ifdef IOMUXC_GPIO_SD_00_GPIO2_IO00
         #define SD_PIN_MOSI  IOMUXC_GPIO_SD_00_GPIO2_IO00
@@ -146,25 +160,17 @@ namespace SDCard {
      * @details Performance-critical code uses direct register manipulation.
      *          All pins are on GPIO2 port for single-port optimization.
      *          Uses DR_SET/DR_CLEAR/DR_TOGGLE for atomic operations.
-     *          IOMUXC is configured in init() for GPIO mode.
-     *
-     *          Pin map (GPIO2):
-     *          - Bit 0:  MOSI (Master Out Slave In)
-     *          - Bit 5:  CS   (Chip Select, active low)
-     *          - Bit 12: MISO (Master In Slave Out)
-     *          - Bit 13: SCK  (Serial Clock)
+     *          Supports SDHC (high capacity) cards automatically.
      */
     class SDCardIO {
         public:
-            static constexpr int BLOCK_SIZE = 512;
-            static constexpr int MAX_RETRIES = 3;
-
             SDCardIO(uint8_t miso = 12, uint8_t mosi = 0,
                      uint8_t sck = 13, uint8_t cs = 5)
                 : m_miso(miso), m_mosi(mosi), m_sck(sck), m_cs(cs),
                   m_miso_mask(1UL << miso), m_mosi_mask(1UL << mosi),
                   m_sck_mask(1UL << sck), m_cs_mask(1UL << cs),
-                  m_mounted(false), m_last_alloc_cluster(2) {
+                  m_mounted(false), m_last_alloc_cluster(2), m_is_sdhc(false),
+                  m_total_sectors(0) {
                 // Cache register pointers for performance
                 m_psr  = (volatile uint32_t*)(GPIO2_PSR);
                 m_set  = (volatile uint32_t*)(GPIO2_DR_SET);
@@ -184,11 +190,6 @@ namespace SDCard {
 
                 // ============================================================
                 // Step 0: Configure IOMUXC for GPIO mode
-                // ============================================================
-                // Per RM: "The I/O multiplexer must be configured to GPIO mode
-                // for the GPIO_DR value to connect with the signal."
-                // Also: "The IOMUXC must be configured to GPIO mode for
-                // GPIO_PSR to reflect the state of the corresponding signal."
                 // ============================================================
                 #ifdef IOMUXC_GPIO_SD_00_GPIO2_IO00
                     IOMUXC_SetPinMux(SD_PIN_MOSI, 0U);
@@ -211,13 +212,12 @@ namespace SDCard {
                 // ============================================================
                 // Step 2: Configure GPIO2 direction register
                 // ============================================================
-                // GDIR: bit = 1 -> Output, bit = 0 -> Input
                 // MOSI, SCK, CS are outputs; MISO is input (default 0)
                 // ============================================================
                 *m_gdir |= (m_mosi_mask | m_sck_mask | m_cs_mask);
 
                 // ============================================================
-                // Step 3: Set initial pin states using DR_SET/CLEAR (atomic)
+                // Step 3: Set initial pin states
                 // ============================================================
                 // CS=HIGH (de-asserted), MOSI=HIGH (idle), SCK=LOW (idle)
                 // ============================================================
@@ -227,16 +227,12 @@ namespace SDCard {
                 // ============================================================
                 // Step 4: Send 80 clock pulses to wake up SD card
                 // ============================================================
-                // SD card needs 74+ clocks after power-up to enter SPI mode
-                // ============================================================
                 for (int i = 0; i < 10; ++i) {
                     fast_spi_xfer(0xFF);
                 }
 
                 // ============================================================
                 // Step 5: CMD0 - GO_IDLE_STATE
-                // ============================================================
-                // R1 response should be 0x01 (card in idle state)
                 // ============================================================
                 int retry;
                 for (retry = 0; retry < 20; ++retry) {
@@ -252,13 +248,11 @@ namespace SDCard {
                 // ============================================================
                 // Step 6: CMD8 - SEND_IF_COND
                 // ============================================================
-                // Check voltage range (2.7-3.6V) and pattern (0x1AA)
-                // ============================================================
                 if (send_cmd(CMD8, 0x1AA) != R1_IDLE) {
                     return false;
                 }
 
-                // Read 4-byte R7 response and discard
+                // Read 4-byte R7 response
                 fast_spi_xfer(0xFF);
                 fast_spi_xfer(0xFF);
                 fast_spi_xfer(0xFF);
@@ -266,8 +260,6 @@ namespace SDCard {
 
                 // ============================================================
                 // Step 7: ACMD41 - SD_SEND_OP_COND
-                // ============================================================
-                // CMD55 (APP_CMD) then ACMD41 with HCS=1 (High Capacity support)
                 // ============================================================
                 for (retry = 0; retry < 500; ++retry) {
                     send_cmd(CMD55, 0);
@@ -282,9 +274,28 @@ namespace SDCard {
                 }
 
                 // ============================================================
-                // Step 8: CMD59 - Disable CRC
+                // Step 8: CMD58 - READ_OCR
                 // ============================================================
-                // Saves 2 bytes per block transfer
+                if (send_cmd(CMD58, 0) == 0x00) {
+                    uint32_t ocr = 0;
+                    ocr |= (uint32_t)fast_spi_xfer(0xFF) << 24;
+                    ocr |= (uint32_t)fast_spi_xfer(0xFF) << 16;
+                    ocr |= (uint32_t)fast_spi_xfer(0xFF) << 8;
+                    ocr |= (uint32_t)fast_spi_xfer(0xFF);
+                    // CCS = bit 30 of OCR
+                    m_is_sdhc = (ocr & 0x40000000) != 0;
+                } else {
+                    // Fallback: assume SDSC if CMD58 fails
+                    m_is_sdhc = false;
+                }
+
+                // ============================================================
+                // Step 9: CMD9 - SEND_CSD (get card capacity)
+                // ============================================================
+                get_card_capacity();
+
+                // ============================================================
+                // Step 10: CMD59 - Disable CRC
                 // ============================================================
                 send_cmd(CMD59, 0);
 
@@ -293,8 +304,28 @@ namespace SDCard {
                 return true;
             }
 
+            /** @brief Check if card is mounted */
             bool is_mounted() const {
                 return m_mounted;
+            }
+
+            /** @brief Check if card is SDHC/SDXC (block addressing) */
+            bool is_sdhc() const {
+                return m_is_sdhc;
+            }
+
+            /** @brief Get total sectors from CSD */
+            uint32_t total_sectors() const {
+                return m_total_sectors;
+            }
+
+            /**
+             * @brief Convert block address to SD card address
+             * @param block  Logical block address (LBA)
+             * @return Physical address for SD command
+             */
+            uint32_t block_to_addr(uint32_t block) const {
+                return m_is_sdhc ? block : (block << 9);
             }
 
             /**
@@ -312,7 +343,6 @@ namespace SDCard {
                     if (read_block_internal(block, buffer)) {
                         return true;
                     }
-                    // Small delay before retry (~2-4us)
                     for (volatile int i = 0; i < 1000; ++i) __NOP();
                 }
                 return false;
@@ -333,7 +363,6 @@ namespace SDCard {
                     if (write_block_internal(block, buffer)) {
                         return true;
                     }
-                    // Small delay before retry (~2-4us)
                     for (volatile int i = 0; i < 1000; ++i) __NOP();
                 }
                 return false;
@@ -366,8 +395,10 @@ namespace SDCard {
 
             bool     m_mounted;
             uint32_t m_last_alloc_cluster;
+            bool     m_is_sdhc;
+            uint32_t m_total_sectors;
 
-            // Cached register pointers (for performance)
+            // Cached register pointers
             volatile uint32_t *m_psr;
             volatile uint32_t *m_set;
             volatile uint32_t *m_clr;
@@ -375,59 +406,100 @@ namespace SDCard {
             volatile uint32_t *m_dr;
             volatile uint32_t *m_gdir;
 
-            /** @brief Pull CS low using DR_CLEAR (atomic) */
+            /**
+             * @brief Read CSD register to get card capacity
+             * @return true on success
+             */
+            bool get_card_capacity() {
+                if (send_cmd(CMD9, 0) != 0x00) {
+                    return false;
+                }
+
+                // Wait for data start token
+                uint8_t token;
+                int timeout = 10000;
+                do {
+                    token = fast_spi_xfer(0xFF);
+                    --timeout;
+                } while (token != DATA_START_TOKEN && timeout > 0);
+
+                if (token != DATA_START_TOKEN) {
+                    return false;
+                }
+
+                // Read 16-byte CSD
+                uint8_t csd[16];
+                fast_spi_read(csd, 16);
+
+                // CSD version 2.0 (SDHC/SDXC)
+                if ((csd[0] >> 6) == 1) {
+                    // Version 2.0: C_SIZE is 22 bits (bits 69-48 of CSD)
+                    uint32_t c_size = 0;
+                    c_size |= ((uint32_t)(csd[7] & 0x3F)) << 16;
+                    c_size |= ((uint32_t)csd[8]) << 8;
+                    c_size |= ((uint32_t)csd[9]);
+                    m_total_sectors = (c_size + 1) * 1024;
+                } else {
+                    // Version 1.0: C_SIZE is 12 bits (bits 73-62)
+                    uint32_t c_size = 0;
+                    c_size |= ((uint32_t)(csd[6] & 0x03)) << 10;
+                    c_size |= ((uint32_t)csd[7]) << 2;
+                    c_size |= ((uint32_t)(csd[8] & 0xC0)) >> 6;
+                    uint32_t read_bl_len = csd[5] & 0x0F;
+                    uint32_t block_len = 1 << read_bl_len;
+                    uint32_t mult = ((csd[9] & 0x03) << 1) | ((csd[10] & 0x80) >> 7);
+                    uint32_t block_count = (c_size + 1) << (mult + 2);
+                    m_total_sectors = (block_count * block_len) / 512;
+                }
+
+                // Discard CRC
+                fast_spi_xfer(0xFF);
+                fast_spi_xfer(0xFF);
+                CS_HIGH();
+                fast_spi_xfer(0xFF);
+
+                return true;
+            }
+
+            // ================================================================
+            // Pin Control Functions (Atomic)
+            // ================================================================
+
             __attribute__((always_inline))
             inline void CS_LOW() {
                 *m_clr = m_cs_mask;
             }
 
-            /** @brief Pull CS high using DR_SET (atomic) */
             __attribute__((always_inline))
             inline void CS_HIGH() {
                 *m_set = m_cs_mask;
             }
 
-            /** @brief Set SCK high using DR_SET (atomic) */
             __attribute__((always_inline))
             inline void SCK_HIGH() {
                 *m_set = m_sck_mask;
             }
 
-            /** @brief Set SCK low using DR_CLEAR (atomic) */
             __attribute__((always_inline))
             inline void SCK_LOW() {
                 *m_clr = m_sck_mask;
             }
 
-            /** @brief Set MOSI high using DR_SET (atomic) */
             __attribute__((always_inline))
             inline void MOSI_HIGH() {
                 *m_set = m_mosi_mask;
             }
 
-            /** @brief Set MOSI low using DR_CLEAR (atomic) */
             __attribute__((always_inline))
             inline void MOSI_LOW() {
                 *m_clr = m_mosi_mask;
             }
 
-            /**
-             * @brief Read MISO pin state from PSR
-             * @return 1 if MISO is HIGH, 0 if LOW
-             *
-             * @note Per RM: Two wait states are required any time PSR is
-             *       accessed for synchronization. The 4 NOPs below account
-             *       for this and provide signal settling time.
-             */
             __attribute__((always_inline))
             inline uint32_t MISO_READ() {
                 return (*m_psr & m_miso_mask) ? 1 : 0;
             }
 
-            /**
-             * @brief Write a bit to MOSI
-             * @param bit  0 or 1
-             */
             __attribute__((always_inline))
             inline void MOSI_WRITE(uint32_t bit) {
                 if (bit) {
@@ -437,19 +509,17 @@ namespace SDCard {
                 }
             }
 
+            // ================================================================
+            // Fast SPI Transfer (Core Performance Function)
+            // ================================================================
+
             /**
              * @brief Ultra-fast software SPI transfer one byte
              * @param tx  Byte to transmit
              * @return    Byte received
              *
              * @details Fully unrolled for speed. Uses DR_SET/DR_CLEAR for
-             *          atomic pin control. 4 NOPs account for PSR wait states
-             *          (2 wait states per RM) plus signal settling time.
-             *
-             *          SPI timing (CPOL=0, CPHA=0):
-             *          - Data captured on SCK rising edge
-             *          - Data changed on SCK falling edge
-             *          - SCK idles LOW
+             *          atomic pin control. 4 NOPs for signal settling.
              */
             __attribute__((always_inline))
             inline uint8_t fast_spi_xfer(uint8_t tx) {
@@ -514,11 +584,6 @@ namespace SDCard {
                 return (uint8_t)rx;
             }
 
-            /**
-             * @brief Fast SPI write multiple bytes
-             * @param data  Data buffer to write
-             * @param len   Number of bytes to write
-             */
             __attribute__((always_inline))
             inline void fast_spi_write(const uint8_t *data, size_t len) {
                 for (size_t i = 0; i < len; ++i) {
@@ -526,17 +591,16 @@ namespace SDCard {
                 }
             }
 
-            /**
-             * @brief Fast SPI read multiple bytes
-             * @param data  Buffer to store read data
-             * @param len   Number of bytes to read
-             */
             __attribute__((always_inline))
             inline void fast_spi_read(uint8_t *data, size_t len) {
                 for (size_t i = 0; i < len; ++i) {
                     data[i] = fast_spi_xfer(0xFF);
                 }
             }
+
+            // ================================================================
+            // SD Card Command Interface
+            // ================================================================
 
             /**
              * @brief Send a command to the SD card
@@ -555,7 +619,7 @@ namespace SDCard {
                 buf[5] = (cmd == CMD0) ? 0x95 : 0xFF;
 
                 CS_LOW();
-                fast_spi_xfer(0xFF);        // Dummy clock
+                fast_spi_xfer(0xFF);
                 fast_spi_write(buf, 6);
 
                 // Wait for R1 response (MSB = 0)
@@ -566,7 +630,6 @@ namespace SDCard {
                     --timeout;
                 } while ((resp & 0x80) && timeout > 0);
 
-                // Raise CS unless command succeeded and caller wants it low
                 bool success = (resp == 0x00) || (resp == R1_IDLE);
                 if (!keep_cs_low || !success) {
                     CS_HIGH();
@@ -576,15 +639,17 @@ namespace SDCard {
                 return resp;
             }
 
-            /**
-             * @brief Internal read block implementation (no retry)
-             */
+            // ================================================================
+            // Internal Read/Write
+            // ================================================================
+
             bool read_block_internal(uint32_t block, uint8_t *buffer) {
-                if (send_cmd(CMD17, block, true) != 0x00) {
+                uint32_t addr = m_is_sdhc ? block : (block << 9);
+
+                if (send_cmd(CMD17, addr, true) != 0x00) {
                     return false;
                 }
 
-                // CS is already low, wait for data start token
                 uint8_t token;
                 int timeout = 10000;
                 do {
@@ -598,37 +663,33 @@ namespace SDCard {
                 }
 
                 fast_spi_read(buffer, BLOCK_SIZE);
-                fast_spi_xfer(0xFF);        // CRC high byte
-                fast_spi_xfer(0xFF);        // CRC low byte
+                fast_spi_xfer(0xFF);
+                fast_spi_xfer(0xFF);
 
                 CS_HIGH();
                 fast_spi_xfer(0xFF);
                 return true;
             }
 
-            /**
-             * @brief Internal write block implementation (no retry)
-             */
             bool write_block_internal(uint32_t block, const uint8_t *buffer) {
-                if (send_cmd(CMD24, block, true) != 0x00) {
+                uint32_t addr = m_is_sdhc ? block : (block << 9);
+
+                if (send_cmd(CMD24, addr, true) != 0x00) {
                     return false;
                 }
 
-                // CS is already low
                 fast_spi_xfer(DATA_START_TOKEN);
                 fast_spi_write(buffer, BLOCK_SIZE);
-                fast_spi_xfer(0xFF);        // CRC high byte
-                fast_spi_xfer(0xFF);        // CRC low byte
+                fast_spi_xfer(0xFF);
+                fast_spi_xfer(0xFF);
 
                 uint8_t resp = fast_spi_xfer(0xFF);
                 CS_HIGH();
 
-                // Check if data was accepted (bits 0-4 = 00101)
                 if ((resp & 0x1F) != DATA_RESPONSE) {
                     return false;
                 }
 
-                // Wait for busy
                 int timeout = 50000;
                 CS_LOW();
                 do {
@@ -640,13 +701,13 @@ namespace SDCard {
                 return (resp == 0xFF);
             }
 
-            /**
-             * @brief Millisecond delay using CPU cycles
-             * @param ms  Milliseconds to delay
-             */
+            // ================================================================
+            // Delay Utilities
+            // ================================================================
+
             static inline void delay_ms(uint32_t ms) {
-                uint32_t cpu_freq = CLOCK_GetFreq(kCLOCK_CpuClk);
-                // 1 ms = cpu_freq / 1000 cycles, each loop ~3 cycles
+                uint32_t cpu_freq = CLOCK_GetFreq((clock_name_t)0);
+                if (cpu_freq == 0) cpu_freq = 500000000;
                 volatile uint64_t count = ((uint64_t)cpu_freq / 1000) * ms / 3;
                 while (count--) {
                     __NOP();
@@ -659,14 +720,17 @@ namespace SDCard {
     // ================================================================
 
     /**
-     * @brief FAT16/FAT32 filesystem driver with read/write/append/delete support
+     * @brief FAT16/FAT32 filesystem driver with full file operations
      *
      * @details Supports FAT16 and FAT32, 8.3 filenames only.
-     *          Provides: mount, open, read, write, append, delete.
+     *          Provides: mount, open, read, write, append, delete,
+     *          rename, mkdir, rmdir, list_root, format, file_exists.
      */
     class FATFS {
         public:
-            // FAT BPB (BIOS Parameter Block) offsets
+            // ================================================================
+            // FAT BPB Offsets
+            // ================================================================
             static constexpr uint16_t BS_BYTSPERSEC = 11;
             static constexpr uint16_t BS_SECPERCLUS = 13;
             static constexpr uint16_t BS_RSVDSECCNT = 14;
@@ -677,51 +741,56 @@ namespace SDCard {
             static constexpr uint16_t BS_TOTSEC32   = 32;
             static constexpr uint16_t BS_FATSZ32    = 36;
             static constexpr uint16_t BS_ROOTCLUS   = 44;
+            static constexpr uint16_t BS_FSINFO     = 48;
+            static constexpr uint16_t BS_BKBOOTSEC  = 50;
+            static constexpr uint16_t BS_VOLUME_ID  = 67;
+            static constexpr uint16_t BS_VOLUME_LAB= 71;
+            static constexpr uint16_t BS_FS_TYPE   = 82;
 
-            // Directory entry offsets
+            // ================================================================
+            // Directory Entry Offsets
+            // ================================================================
             static constexpr uint16_t DIR_NAME      = 0;
             static constexpr uint16_t DIR_ATTR      = 11;
             static constexpr uint16_t DIR_FSTCLUSHI = 20;
             static constexpr uint16_t DIR_FSTCLUSLO = 26;
             static constexpr uint16_t DIR_FILESIZE  = 28;
 
-            // File attributes
-            static constexpr uint8_t ATTR_ARCHIVE   = 0x20;
+            // ================================================================
+            // File Attributes
+            // ================================================================
+            static constexpr uint8_t ATTR_READ_ONLY = 0x01;
+            static constexpr uint8_t ATTR_HIDDEN    = 0x02;
+            static constexpr uint8_t ATTR_SYSTEM    = 0x04;
+            static constexpr uint8_t ATTR_VOLUME_ID = 0x08;
             static constexpr uint8_t ATTR_DIRECTORY = 0x10;
+            static constexpr uint8_t ATTR_ARCHIVE   = 0x20;
             static constexpr uint8_t ATTR_LONG_NAME = 0x0F;
 
-            // Cluster constants
+            // ================================================================
+            // Cluster Constants
+            // ================================================================
             static constexpr uint32_t CLUSTER_FREE = 0x00000000;
 
             /**
-             * @brief Get the EOC (End Of Chain) value for current FAT type
-             * @return EOC value (0x0FFFFFF8 for FAT32, 0xFFFF for FAT16)
-             */
-            uint32_t eoc_value() const {
-                return m_is_fat32 ? 0x0FFFFFF8 : 0xFFFF;
-            }
-
-            /**
-             * @brief Check if a cluster is end-of-chain
-             * @param cluster  Cluster number to check
-             * @return true if cluster is end-of-chain
-             */
-            bool is_eoc(uint32_t cluster) const {
-                if (m_is_fat32) {
-                    return cluster >= 0x0FFFFFF8;
-                } else {
-                    return cluster >= 0xFFF8;
-                }
-            }
-
-            /**
-             * @brief File handle structure for open files
+             * @brief File handle structure
              */
             struct File {
                 uint32_t start_cluster;
                 uint32_t current_cluster;
                 uint32_t file_size;
                 uint32_t position;
+            };
+
+            /**
+             * @brief Directory entry information
+             */
+            struct DirEntry {
+                char     name[13];
+                uint32_t size;
+                uint32_t cluster;
+                uint8_t  attr;
+                bool     is_directory;
             };
 
             /**
@@ -755,6 +824,11 @@ namespace SDCard {
                     return false;
                 }
 
+                // Check boot sector signature
+                if (m_block_buf[510] != 0x55 || m_block_buf[511] != 0xAA) {
+                    return false;
+                }
+
                 // Parse BPB
                 m_bytes_per_sec = read16(m_block_buf, BS_BYTSPERSEC);
                 m_sec_per_clus  = m_block_buf[BS_SECPERCLUS];
@@ -764,7 +838,6 @@ namespace SDCard {
 
                 uint32_t fatsz16 = read16(m_block_buf, BS_FATSZ16);
                 if (fatsz16 != 0) {
-                    // FAT16
                     m_fat_size  = fatsz16;
                     m_total_sectors = read16(m_block_buf, BS_TOTSEC16);
                     if (m_total_sectors == 0) {
@@ -772,7 +845,6 @@ namespace SDCard {
                     }
                     m_is_fat32 = false;
                 } else {
-                    // FAT32
                     m_fat_size  = read32(m_block_buf, BS_FATSZ32);
                     m_total_sectors = read32(m_block_buf, BS_TOTSEC32);
                     m_is_fat32 = true;
@@ -793,17 +865,25 @@ namespace SDCard {
                 return true;
             }
 
-            /**
-             * @brief Check if filesystem is mounted
-             * @return true if mounted
-             */
+            /** @brief Check if filesystem is mounted */
             bool is_mounted() const {
                 return m_mounted;
             }
 
             /**
-             * @brief Open a file by name
-             * @param name  Filename (8.3 format, e.g., "README.TXT")
+             * @brief Check if a file exists
+             * @param name  Filename (8.3 format)
+             * @return true if file exists
+             */
+            bool file_exists(const char *name) {
+                if (!m_mounted || !name) return false;
+                uint32_t sector, offset;
+                return find_dir_entry(name, sector, offset, false);
+            }
+
+            /**
+             * @brief Open a file
+             * @param name  Filename (8.3 format)
              * @param file  File handle to fill
              * @return true on success, false if file not found
              */
@@ -830,7 +910,7 @@ namespace SDCard {
 
             /**
              * @brief Read data from an open file
-             * @param file  File handle (updated with current position)
+             * @param file  File handle (updated)
              * @param buf   Buffer to store read data
              * @param size  Number of bytes to read
              * @return      Number of bytes actually read
@@ -886,7 +966,7 @@ namespace SDCard {
             }
 
             /**
-             * @brief Read an entire file into a vector
+             * @brief Read entire file into vector
              * @param name  Filename (8.3 format)
              * @param data  Vector to store file data
              * @return true on success
@@ -903,7 +983,7 @@ namespace SDCard {
             }
 
             /**
-             * @brief Read an entire file into a string
+             * @brief Read entire file into string
              * @param name  Filename (8.3 format)
              * @param str   String to store file data
              * @return true on success
@@ -918,27 +998,23 @@ namespace SDCard {
             }
 
             /**
-             * @brief Write data to a file (creates or overwrites)
+             * @brief Write data to file (creates or overwrites)
              * @param name  Filename (8.3 format)
              * @param data  Data to write
              * @param size  Number of bytes
              * @return true on success
-             *
-             * @details This function first writes all data to new clusters,
-             *          then releases the old cluster chain (if any).
-             *          This provides better atomicity than releasing first.
              */
             bool write_file(const char *name, const uint8_t *data, uint32_t size) {
                 if (!m_mounted || !name || !data || size == 0) {
                     return false;
                 }
 
+                // Delete existing file first
                 uint32_t sector, offset;
                 File existing;
                 uint32_t old_cluster = 0;
                 bool has_existing = false;
 
-                // Check if file already exists
                 if (find_dir_entry(name, sector, offset, false)) {
                     has_existing = true;
                     uint8_t *entry = m_block_buf + offset;
@@ -969,7 +1045,6 @@ namespace SDCard {
                         }
                         memcpy(temp, data + written, chunk);
                         if (!m_card.write_block(base_sector + sec, temp)) {
-                            // Release allocated clusters on error
                             release_cluster_chain(cluster);
                             return false;
                         }
@@ -990,13 +1065,13 @@ namespace SDCard {
                     }
                 }
 
-                // Data written successfully, now release old clusters
+                // Release old clusters
                 if (has_existing && old_cluster != 0 && !is_eoc(old_cluster)) {
                     release_cluster_chain(old_cluster);
                     m_card.set_last_alloc_cluster(2);
                 }
 
-                // Find or create directory entry
+                // Create/update directory entry
                 if (!find_dir_entry(name, sector, offset, true)) {
                     release_cluster_chain(cluster);
                     return false;
@@ -1020,7 +1095,7 @@ namespace SDCard {
             }
 
             /**
-             * @brief Write a string to a file (creates or overwrites)
+             * @brief Write string to file
              * @param name  Filename (8.3 format)
              * @param str   String to write
              * @return true on success
@@ -1030,7 +1105,7 @@ namespace SDCard {
             }
 
             /**
-             * @brief Append data to an existing file
+             * @brief Append data to existing file
              * @param name  Filename (8.3 format)
              * @param data  Data to append
              * @param size  Number of bytes
@@ -1053,45 +1128,28 @@ namespace SDCard {
                 }
                 uint32_t file_size = read32(entry, DIR_FILESIZE);
 
-                // Use File struct to cache cluster chain traversal
-                File file;
-                file.start_cluster = start_cluster;
-                file.current_cluster = start_cluster;
-                file.file_size = file_size;
-                file.position = 0;
-
-                // Fast forward to end of file
-                uint32_t bytes_per_cluster = (uint32_t)m_sec_per_clus * m_bytes_per_sec;
-
-                while (file.position < file.file_size) {
-                    uint32_t cluster_offset = file.position % bytes_per_cluster;
-                    if (cluster_offset == 0 && file.position > 0) {
-                        uint32_t next = next_cluster(file.current_cluster);
-                        if (is_eoc(next)) {
-                            break;
-                        }
-                        file.current_cluster = next;
+                // Find last cluster
+                uint32_t cur_cluster = start_cluster;
+                uint32_t next;
+                uint32_t traverse_count = 0;
+                while (true) {
+                    next = next_cluster(cur_cluster);
+                    if (is_eoc(next)) {
+                        break;
                     }
-                    uint32_t remaining = file.file_size - file.position;
-                    uint32_t chunk = bytes_per_cluster - cluster_offset;
-                    if (chunk > remaining) {
-                        chunk = remaining;
+                    cur_cluster = next;
+                    if (++traverse_count > MAX_CLUSTER_TRAVERSE) {
+                        return false;
                     }
-                    file.position += chunk;
                 }
 
-                // file.current_cluster is now the last cluster
-                uint32_t cur_cluster = file.current_cluster;
-
-                // Handle empty file case
+                // Handle empty file
                 if (file_size == 0) {
-                    // File is empty, just use start cluster or allocate new one
                     if (cur_cluster == 0 || is_eoc(cur_cluster)) {
                         cur_cluster = alloc_cluster();
                         if (cur_cluster == 0) {
                             return false;
                         }
-                        // Update directory entry with first cluster
                         if (!m_card.read_block(sector, m_block_buf)) {
                             return false;
                         }
@@ -1107,8 +1165,9 @@ namespace SDCard {
                 }
 
                 uint32_t written = 0;
-                uint32_t position = file.file_size;
+                uint32_t position = file_size;
                 uint8_t temp[512];
+                uint32_t bytes_per_cluster = (uint32_t)m_sec_per_clus * m_bytes_per_sec;
 
                 while (written < size) {
                     if (position > 0 && (position % bytes_per_cluster) == 0) {
@@ -1148,7 +1207,7 @@ namespace SDCard {
                     position += chunk;
                 }
 
-                // Update file size in directory
+                // Update file size
                 if (!m_card.read_block(sector, m_block_buf)) {
                     return false;
                 }
@@ -1157,7 +1216,7 @@ namespace SDCard {
             }
 
             /**
-             * @brief Append a string to an existing file
+             * @brief Append string to existing file
              * @param name  Filename (8.3 format)
              * @param str   String to append
              * @return true on success
@@ -1187,8 +1246,7 @@ namespace SDCard {
                     cluster |= (read16(entry, DIR_FSTCLUSHI) << 16);
                 }
 
-                // Clean up LFN (Long File Name) entries if present
-                // LFN entries appear before the short name entry
+                // Clean up LFN entries
                 uint16_t lfn_off = offset;
                 while (lfn_off >= 32) {
                     lfn_off -= 32;
@@ -1208,45 +1266,531 @@ namespace SDCard {
                 release_cluster_chain(cluster);
                 m_card.set_last_alloc_cluster(2);
 
-                // Mark short name entry as deleted
+                // Mark directory entry as deleted
                 m_block_buf[offset] = 0xE5;
                 return m_card.write_block(sector, m_block_buf);
             }
 
             /**
-             * @brief Unmount the filesystem
+             * @brief Rename a file
+             * @param old_name  Current filename (8.3 format)
+             * @param new_name  New filename (8.3 format)
+             * @return true on success
              */
+            bool rename_file(const char *old_name, const char *new_name) {
+                if (!m_mounted || !old_name || !new_name) {
+                    return false;
+                }
+
+                // Check if new name already exists
+                if (file_exists(new_name)) {
+                    return false;
+                }
+
+                uint32_t old_sector = 0, old_offset = 0;
+                if (!find_dir_entry(old_name, old_sector, old_offset, false)) {
+                    return false;
+                }
+
+                // Save old entry data
+                if (!m_card.read_block(old_sector, m_block_buf)) {
+                    return false;
+                }
+                uint8_t old_entry[32];
+                memcpy(old_entry, m_block_buf + old_offset, 32);
+
+                // Find or create new entry slot
+                uint32_t new_sector = 0, new_offset = 0;
+                if (!find_dir_entry(new_name, new_sector, new_offset, true)) {
+                    return false;
+                }
+
+                // Read new sector
+                if (!m_card.read_block(new_sector, m_block_buf)) {
+                    return false;
+                }
+
+                // Write new entry
+                memset(m_block_buf + new_offset, 0, 32);
+                make_83_name(new_name, m_block_buf + new_offset + DIR_NAME);
+                m_block_buf[new_offset + DIR_ATTR] = old_entry[DIR_ATTR];
+                memcpy(m_block_buf + new_offset + DIR_FSTCLUSLO,
+                       old_entry + DIR_FSTCLUSLO, 4);
+                if (m_is_fat32) {
+                    memcpy(m_block_buf + new_offset + DIR_FSTCLUSHI,
+                           old_entry + DIR_FSTCLUSHI, 2);
+                }
+                write32(m_block_buf, new_offset + DIR_FILESIZE,
+                        read32(old_entry, DIR_FILESIZE));
+
+                if (!m_card.write_block(new_sector, m_block_buf)) {
+                    return false;
+                }
+
+                // Read old sector again and delete old entry
+                if (!m_card.read_block(old_sector, m_block_buf)) {
+                    return false;
+                }
+                m_block_buf[old_offset] = 0xE5;
+                return m_card.write_block(old_sector, m_block_buf);
+            }
+
+            /**
+             * @brief Create a directory
+             * @param name  Directory name (8.3 format)
+             * @return true on success
+             */
+            bool mkdir(const char *name) {
+                if (!m_mounted || !name) {
+                    return false;
+                }
+
+                if (file_exists(name)) {
+                    return false;
+                }
+
+                uint32_t cluster = alloc_cluster();
+                if (cluster == 0) {
+                    return false;
+                }
+
+                uint32_t base_sector = cluster_to_sector(cluster);
+                uint32_t bytes_per_cluster = (uint32_t)m_sec_per_clus * m_bytes_per_sec;
+
+                // Zero first sector
+                memset(m_block_buf, 0, m_bytes_per_sec);
+
+                // First entry: "." (current directory)
+                memset(m_block_buf, ' ', 11);
+                m_block_buf[0] = '.';
+                m_block_buf[DIR_ATTR] = ATTR_DIRECTORY;
+                write16(m_block_buf, DIR_FSTCLUSLO, cluster & 0xFFFF);
+                if (m_is_fat32) {
+                    write16(m_block_buf, DIR_FSTCLUSHI, (cluster >> 16) & 0xFFFF);
+                }
+
+                // Second entry: ".." (parent directory)
+                memset(m_block_buf + 32, ' ', 11);
+                m_block_buf[32] = '.';
+                m_block_buf[33] = '.';
+                m_block_buf[32 + DIR_ATTR] = ATTR_DIRECTORY;
+                write16(m_block_buf, 32 + DIR_FSTCLUSLO,
+                        m_is_fat32 ? m_root_cluster : 0);
+                if (m_is_fat32) {
+                    write16(m_block_buf, 32 + DIR_FSTCLUSHI,
+                            (m_root_cluster >> 16) & 0xFFFF);
+                }
+
+                // Write first sector
+                if (!m_card.write_block(base_sector, m_block_buf)) {
+                    release_cluster_chain(cluster);
+                    return false;
+                }
+
+                // Clear remaining sectors in cluster
+                memset(m_block_buf, 0, m_bytes_per_sec);
+                for (uint32_t sec = 1; sec < m_sec_per_clus; ++sec) {
+                    if (!m_card.write_block(base_sector + sec, m_block_buf)) {
+                        release_cluster_chain(cluster);
+                        return false;
+                    }
+                }
+
+                // Create directory entry in root
+                uint32_t dir_sector = 0, dir_offset = 0;
+                if (!find_dir_entry(name, dir_sector, dir_offset, true)) {
+                    release_cluster_chain(cluster);
+                    return false;
+                }
+
+                if (!m_card.read_block(dir_sector, m_block_buf)) {
+                    release_cluster_chain(cluster);
+                    return false;
+                }
+
+                memset(m_block_buf + dir_offset, 0, 32);
+                make_83_name(name, m_block_buf + dir_offset + DIR_NAME);
+                m_block_buf[dir_offset + DIR_ATTR] = ATTR_DIRECTORY;
+                write16(m_block_buf, dir_offset + DIR_FSTCLUSLO, cluster & 0xFFFF);
+                if (m_is_fat32) {
+                    write16(m_block_buf, dir_offset + DIR_FSTCLUSHI, (cluster >> 16) & 0xFFFF);
+                }
+                write32(m_block_buf, dir_offset + DIR_FILESIZE, 0);
+
+                return m_card.write_block(dir_sector, m_block_buf);
+            }
+
+            /**
+             * @brief Delete an empty directory
+             * @param name  Directory name (8.3 format)
+             * @return true on success
+             */
+            bool rmdir(const char *name) {
+                if (!m_mounted || !name) {
+                    return false;
+                }
+
+                if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
+                    return false;
+                }
+
+                uint32_t sector, offset;
+                if (!find_dir_entry(name, sector, offset, false)) {
+                    return false;
+                }
+
+                uint8_t *entry = m_block_buf + offset;
+                if ((entry[DIR_ATTR] & ATTR_DIRECTORY) == 0) {
+                    return false;
+                }
+
+                uint32_t cluster = read16(entry, DIR_FSTCLUSLO);
+                if (m_is_fat32) {
+                    cluster |= (read16(entry, DIR_FSTCLUSHI) << 16);
+                }
+
+                // Check if directory is empty
+                if (!is_directory_empty(cluster)) {
+                    return false;
+                }
+
+                release_cluster_chain(cluster);
+                m_card.set_last_alloc_cluster(2);
+
+                // Delete directory entry
+                if (!m_card.read_block(sector, m_block_buf)) {
+                    return false;
+                }
+                m_block_buf[offset] = 0xE5;
+                return m_card.write_block(sector, m_block_buf);
+            }
+
+            /**
+             * @brief Check if a directory is empty (only "." and "..")
+             * @param cluster  Directory cluster
+             * @return true if empty
+             */
+            bool is_directory_empty(uint32_t cluster) {
+                uint32_t base_sector = cluster_to_sector(cluster);
+
+                for (uint32_t sec = 0; sec < m_sec_per_clus; ++sec) {
+                    if (!m_card.read_block(base_sector + sec, m_block_buf)) {
+                        return false;
+                    }
+
+                    uint16_t start_off = (sec == 0) ? 64 : 0;  // Skip "." and ".." in first sector
+                    for (uint16_t off = start_off; off < m_bytes_per_sec; off += 32) {
+                        uint8_t first = m_block_buf[off];
+                        if (first != 0x00 && first != 0xE5) {
+                            return false;  // Non-empty
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            /**
+             * @brief List root directory entries
+             * @param entries  Vector to store directory entries
+             * @return Number of entries found
+             */
+            size_t list_root(std::vector<DirEntry> &entries) {
+                entries.clear();
+                if (!m_mounted) {
+                    return 0;
+                }
+
+                uint32_t cluster = m_is_fat32 ? m_root_cluster : 0;
+                uint32_t traverse_count = 0;
+
+                while (true) {
+                    uint32_t base_sector = m_is_fat32 ? cluster_to_sector(cluster) : m_root_start;
+
+                    for (uint32_t sec = 0; sec < m_sec_per_clus; ++sec) {
+                        if (!m_card.read_block(base_sector + sec, m_block_buf)) {
+                            return entries.size();
+                        }
+
+                        for (uint16_t off = 0; off < m_bytes_per_sec; off += 32) {
+                            uint8_t first = m_block_buf[off];
+                            if (first == 0x00) {
+                                return entries.size();
+                            }
+                            if (first == 0xE5) {
+                                continue;
+                            }
+
+                            uint8_t attr = m_block_buf[off + DIR_ATTR];
+                            if (attr == ATTR_LONG_NAME) {
+                                continue;
+                            }
+
+                            DirEntry entry;
+                            int pos = 0;
+                            for (int i = 0; i < 8 && m_block_buf[off + i] != ' '; ++i) {
+                                entry.name[pos++] = m_block_buf[off + i];
+                            }
+                            if (m_block_buf[off + 8] != ' ') {
+                                entry.name[pos++] = '.';
+                                for (int i = 8; i < 11 && m_block_buf[off + i] != ' '; ++i) {
+                                    entry.name[pos++] = m_block_buf[off + i];
+                                }
+                            }
+                            entry.name[pos] = '\0';
+
+                            entry.size = read32(m_block_buf, off + DIR_FILESIZE);
+                            entry.attr = attr;
+                            entry.is_directory = (attr & ATTR_DIRECTORY) != 0;
+                            entry.cluster = read16(m_block_buf, off + DIR_FSTCLUSLO);
+                            if (m_is_fat32) {
+                                entry.cluster |= (read16(m_block_buf, off + DIR_FSTCLUSHI) << 16);
+                            }
+
+                            entries.push_back(entry);
+                        }
+                    }
+
+                    if (!m_is_fat32) {
+                        break;
+                    }
+                    cluster = next_cluster(cluster);
+                    if (is_eoc(cluster) || ++traverse_count > MAX_CLUSTER_TRAVERSE) {
+                        break;
+                    }
+                }
+
+                return entries.size();
+            }
+
+            /**
+             * @brief Format SD card as FAT32/FAT16
+             * @param label  Volume label (11 characters, optional)
+             * @return true on success
+             * @warning THIS WILL ERASE ALL DATA ON THE CARD!
+             */
+            bool format(const char *label = nullptr) {
+                if (!m_card.is_mounted()) {
+                    return false;
+                }
+
+                // Unmount first
+                m_mounted = false;
+
+                uint32_t total_sectors = m_card.total_sectors();
+                if (total_sectors == 0) {
+                    total_sectors = 2000000;  // Fallback for unknown cards
+                }
+
+                // Use FAT32 for cards > 65536 sectors (~32MB)
+                bool use_fat32 = (total_sectors > 65536);
+                // Don't set m_is_fat32 here - will be set after successful format
+
+                uint32_t sec_per_clus = 8;
+                if (use_fat32) {
+                    if (total_sectors > 0x800000) sec_per_clus = 16;
+                    if (total_sectors > 0x1000000) sec_per_clus = 32;
+                    if (total_sectors > 0x2000000) sec_per_clus = 64;
+                } else {
+                    if (total_sectors > 0x10000) sec_per_clus = 16;
+                    else if (total_sectors > 0x8000) sec_per_clus = 8;
+                    else sec_per_clus = 4;
+                }
+
+                uint32_t rsvd_sec = use_fat32 ? 32 : 1;
+                uint32_t num_fats = 2;
+                uint32_t root_entries = use_fat32 ? 0 : 512;
+                uint32_t fatsz = 0;
+
+                if (use_fat32) {
+                    // FAT32: calculate FAT size from cluster count
+                    uint32_t data_clusters = (total_sectors - rsvd_sec) / sec_per_clus;
+                    fatsz = (data_clusters * 4 + 511) / 512 + 1;
+                    if (fatsz < 32) fatsz = 32;
+                } else {
+                    // FAT16: calculate FAT size
+                    uint32_t root_sectors = (root_entries * 32 + 511) / 512;
+                    uint32_t data_sectors = total_sectors - rsvd_sec - num_fats * fatsz - root_sectors;
+                    uint32_t data_clusters = data_sectors / sec_per_clus;
+                    fatsz = (data_clusters * 2 + 511) / 512 + 1;
+                    if (fatsz < 1) fatsz = 1;
+                }
+
+                // Build boot sector
+                memset(m_block_buf, 0, 512);
+                m_block_buf[0] = 0xEB;
+                m_block_buf[1] = 0x58;
+                m_block_buf[2] = 0x90;
+
+                const char *oem = "MSWIN4.1";
+                memcpy(m_block_buf + 3, oem, 8);
+
+                write16(m_block_buf, BS_BYTSPERSEC, 512);
+                m_block_buf[BS_SECPERCLUS] = sec_per_clus;
+                write16(m_block_buf, BS_RSVDSECCNT, rsvd_sec);
+                m_block_buf[BS_NUMFATS] = num_fats;
+                write16(m_block_buf, BS_ROOTENTCNT, root_entries);
+                write16(m_block_buf, BS_TOTSEC16, (total_sectors < 0xFFFF) ? total_sectors : 0);
+                m_block_buf[21] = 0xF8;
+
+                if (use_fat32) {
+                    write16(m_block_buf, BS_FATSZ16, 0);
+                    write32(m_block_buf, BS_TOTSEC32, total_sectors);
+                    write32(m_block_buf, BS_FATSZ32, fatsz);
+                    write32(m_block_buf, BS_ROOTCLUS, 2);
+                    write16(m_block_buf, BS_FSINFO, 1);
+                    write16(m_block_buf, BS_BKBOOTSEC, 6);
+                } else {
+                    write16(m_block_buf, BS_FATSZ16, fatsz);
+                    write16(m_block_buf, BS_TOTSEC16, total_sectors);
+                }
+
+                // Volume label and FS type
+                if (label) {
+                    for (int i = 0; i < 11 && label[i]; ++i) {
+                        m_block_buf[BS_VOLUME_LAB + i] = toupper(label[i]);
+                    }
+                }
+                const char *fs_type = use_fat32 ? "FAT32   " : "FAT16   ";
+                memcpy(m_block_buf + BS_FS_TYPE, fs_type, 8);
+
+                m_block_buf[510] = 0x55;
+                m_block_buf[511] = 0xAA;
+
+                // Write boot sector
+                if (!m_card.write_block(0, m_block_buf)) {
+                    m_mounted = false;
+                    return false;
+                }
+
+                // Build and write FSInfo sector (FAT32 only)
+                if (use_fat32) {
+                    // Write backup boot sector
+                    if (!m_card.write_block(6, m_block_buf)) {
+                        m_mounted = false;
+                        return false;
+                    }
+
+                    // Build FSInfo sector
+                    memset(m_block_buf, 0, 512);
+                    m_block_buf[0] = 0x52;
+                    m_block_buf[1] = 0x52;
+                    m_block_buf[2] = 0x61;
+                    m_block_buf[3] = 0x41;
+                    write32(m_block_buf, 484, 0xFFFFFFFF);  // Free cluster count
+                    write32(m_block_buf, 488, 2);           // Next free cluster
+                    m_block_buf[510] = 0x55;
+                    m_block_buf[511] = 0xAA;
+
+                    if (!m_card.write_block(1, m_block_buf)) {
+                        m_mounted = false;
+                        return false;
+                    }
+                }
+
+                // Initialize FATs
+                memset(m_block_buf, 0, 512);
+                if (use_fat32) {
+                    write32(m_block_buf, 0, 0x0FFFFFF8);
+                    write32(m_block_buf, 4, 0x0FFFFFFF);
+                    write32(m_block_buf, 8, 0x0FFFFFFF);  // Root cluster
+                } else {
+                    write16(m_block_buf, 0, 0xFFF8);
+                    write16(m_block_buf, 2, 0xFFFF);
+                }
+
+                uint32_t fat_sector = rsvd_sec;
+                for (int fat = 0; fat < num_fats; ++fat) {
+                    for (uint32_t sec = 0; sec < fatsz; ++sec) {
+                        if (sec == 0) {
+                            if (!m_card.write_block(fat_sector + sec, m_block_buf)) {
+                                m_mounted = false;
+                                return false;
+                            }
+                        } else {
+                            memset(m_block_buf, 0, 512);
+                            if (!m_card.write_block(fat_sector + sec, m_block_buf)) {
+                                m_mounted = false;
+                                return false;
+                            }
+                        }
+                    }
+                    fat_sector += fatsz;
+                }
+
+                // Initialize root directory
+                uint32_t root_sector = rsvd_sec + num_fats * fatsz;
+                memset(m_block_buf, 0, 512);
+
+                if (use_fat32) {
+                    // Root directory is cluster 2
+                    root_sector += (2 - 2) * sec_per_clus;
+                    for (uint32_t sec = 0; sec < sec_per_clus; ++sec) {
+                        if (!m_card.write_block(root_sector + sec, m_block_buf)) {
+                            m_mounted = false;
+                            return false;
+                        }
+                    }
+                } else {
+                    uint32_t root_sectors = (root_entries * 32 + 511) / 512;
+                    for (uint32_t sec = 0; sec < root_sectors; ++sec) {
+                        if (!m_card.write_block(root_sector + sec, m_block_buf)) {
+                            m_mounted = false;
+                            return false;
+                        }
+                    }
+                }
+
+                // Update state after successful format
+                m_is_fat32 = use_fat32;
+                m_fat_start = rsvd_sec;
+                m_fat_size = fatsz;
+                m_data_start = rsvd_sec + num_fats * fatsz +
+                               (use_fat32 ? 0 : (root_entries * 32 + 511) / 512);
+                m_root_cluster = use_fat32 ? 2 : 0;
+                m_total_sectors = total_sectors;
+                m_mounted = true;
+
+                return true;
+            }
+
             void unmount() {
                 m_mounted = false;
             }
 
         private:
-            /**
-             * @brief Release a cluster chain back to free pool
-             * @param cluster  Starting cluster of the chain
-             */
+            // ================================================================
+            // Helper Functions
+            // ================================================================
+
+            inline uint32_t eoc_value() const {
+                return m_is_fat32 ? 0x0FFFFFF8 : 0xFFFF;
+            }
+
+            inline bool is_eoc(uint32_t cluster) const {
+                if (m_is_fat32) {
+                    return cluster >= 0x0FFFFFF8;
+                } else {
+                    return cluster >= 0xFFF8;
+                }
+            }
+
             void release_cluster_chain(uint32_t cluster) {
+                uint32_t traverse_count = 0;
                 while (!is_eoc(cluster)) {
                     uint32_t next = next_cluster(cluster);
                     set_cluster(cluster, CLUSTER_FREE);
-                    if (next == 0 || is_eoc(next)) {
+                    if (next == 0 || is_eoc(next) || ++traverse_count > MAX_CLUSTER_TRAVERSE) {
                         break;
                     }
                     cluster = next;
                 }
             }
 
-            /**
-             * @brief Find a directory entry by name
-             * @param name                  Filename to search
-             * @param sector_out           [out] Sector containing the entry
-             * @param offset_out           [out] Offset within sector
-             * @param create_if_not_found  If true, return first free slot
-             * @return true on success
-             */
             bool find_dir_entry(const char *name, uint32_t &sector_out,
                                 uint16_t &offset_out, bool create_if_not_found) {
                 uint32_t cluster = m_is_fat32 ? m_root_cluster : 0;
+                uint32_t traverse_count = 0;
 
                 while (true) {
                     uint32_t base_sector = m_is_fat32 ? cluster_to_sector(cluster) : m_root_start;
@@ -1293,7 +1837,7 @@ namespace SDCard {
                         break;
                     }
                     cluster = next_cluster(cluster);
-                    if (is_eoc(cluster)) {
+                    if (is_eoc(cluster) || ++traverse_count > MAX_CLUSTER_TRAVERSE) {
                         break;
                     }
                 }
@@ -1393,7 +1937,6 @@ namespace SDCard {
                     }
                 }
 
-                // Wrap around and search from beginning
                 for (uint32_t cluster = 2; cluster < start; ++cluster) {
                     if (next_cluster(cluster) == CLUSTER_FREE) {
                         if (set_cluster(cluster, eoc_value())) {
@@ -1410,19 +1953,12 @@ namespace SDCard {
                 return 0;
             }
 
-            /**
-             * @brief Compare 8.3 filename with directory entry
-             * @param entry  Directory entry (11 bytes, space-padded)
-             * @param name   Filename (e.g., "README.TXT")
-             * @return true if match
-             */
             static bool name_match(const uint8_t *entry, const char *name) {
                 if (!entry || !name) return false;
 
                 char fname[13] = {0};
                 int pos = 0;
 
-                // Build 8.3 name from directory entry
                 for (int i = 0; i < 8 && entry[i] != ' '; ++i) {
                     fname[pos++] = entry[i];
                 }
@@ -1433,7 +1969,6 @@ namespace SDCard {
                     }
                 }
 
-                // Case-insensitive compare with bounds check
                 for (int i = 0; i < 13; ++i) {
                     char a = fname[i];
                     char b = name[i];
@@ -1450,11 +1985,6 @@ namespace SDCard {
                 return true;
             }
 
-            /**
-             * @brief Convert filename to 8.3 format
-             * @param name  Source filename
-             * @param out   11-byte buffer (space-padded)
-             */
             static void make_83_name(const char *name, uint8_t *out) {
                 memset(out, ' ', 11);
 
@@ -1462,7 +1992,6 @@ namespace SDCard {
                 int name_len = dot ? (int)(dot - name) : (int)strlen(name);
                 if (name_len > 8) name_len = 8;
 
-                // Convert name part to uppercase
                 for (int i = 0; i < name_len; ++i) {
                     char c = name[i];
                     if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
@@ -1474,7 +2003,6 @@ namespace SDCard {
                     }
                 }
 
-                // Convert extension part to uppercase
                 if (dot && dot[1]) {
                     int ext_len = strlen(dot + 1);
                     if (ext_len > 3) ext_len = 3;
